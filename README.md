@@ -49,7 +49,8 @@ export HF_TOKEN=hf_xxxxxxxxxxxx
 # 1. Install llama.cpp (Metal-enabled, precompiled)
 brew install llama.cpp
 
-# 2. Install pi
+# 2. Install pi (needs Node ≥ 20.18.1; install via `brew install node` or nvm
+#    if you don't have it, or hit "pi install fails" in Troubleshooting)
 curl -fsSL https://pi.dev/install.sh | sh
 
 # 3. Download the model (~21 GB)
@@ -207,6 +208,31 @@ Set up `hf_transfer` and an HF token:
 pip install -U hf_transfer
 export HF_HUB_ENABLE_HF_TRANSFER=1
 export HF_TOKEN=hf_xxxxxxxxxxxx   # from https://huggingface.co/settings/tokens
+```
+
+### pi install fails with `EACCES` or `EBADENGINE`
+The installer is a thin wrapper around `npm install -g @earendil-works/pi-coding-agent`, so it needs a recent Node *and* a user-writable npm prefix. Two failure modes:
+
+- **`EBADENGINE` warnings** about `undici` (needs Node ≥ 20.18.1) or `hosted-git-info` (^20.17.0 || ≥ 22.9.0) — your Node is too old.
+- **`EACCES: permission denied, mkdir '/usr/local/lib/node_modules/...'`** — Node was installed from the official `.pkg`, which puts globals under root-owned `/usr/local`. Don't `sudo npm i -g`; it leaves root-owned caches that break `pi update` later.
+
+Fix both at once by replacing the system Node with a user-owned one. Either:
+
+```bash
+# Option A — Homebrew
+sudo rm -rf /usr/local/bin/node /usr/local/bin/npm /usr/local/bin/npx \
+            /usr/local/lib/node_modules /usr/local/include/node
+brew install node
+hash -r
+npm install -g @earendil-works/pi-coding-agent
+```
+
+```bash
+# Option B — nvm (no sudo at all)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+exec $SHELL -l
+nvm install 22 && nvm use 22
+npm install -g @earendil-works/pi-coding-agent
 ```
 
 ### `error: unknown value for --flash-attn`
