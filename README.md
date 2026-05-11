@@ -17,7 +17,7 @@ No API keys. No cloud round-trips. All inference on your machine.
 - pi `latest`
 - Quant: `Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf` (~21 GB on disk, ~24 GB resident with 32k context)
 
-Measured throughput on this hardware: **~583 tok/s prefill (pp512)** and **~49 tok/s decode (tg128)**. See [Benchmarking](#benchmarking).
+Measured throughput on this hardware: **~594 tok/s prefill (pp512)**, **~409 tok/s prefill (pp8192)**, and **~51 tok/s decode (tg128)**. See [Benchmarking](#benchmarking).
 
 Should work on any Apple Silicon Mac with ≥ 32 GB RAM. Bigger context windows or higher-bit quants need more.
 
@@ -183,20 +183,38 @@ Reports raw inference speed via `llama-bench` — prompt processing (`pp`, prefi
 ./bench/throughput.sh
 ```
 
-Output is a markdown table like:
+For a richer sweep — multiple prompt sizes, multiple generation lengths, and a combined prefill+decode test that resembles a real pi turn — call `llama-bench` directly:
+
+```bash
+llama-bench \
+  -m ~/models/qwen3-coder-30b-a3b/Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf \
+  -p 512,2048,8192 \
+  -n 128,512 \
+  -pg 8192,128 \
+  -ngl 99 -fa 1 -r 3
+```
+
+Real run on Apple M1 Max, 64 GB, llama.cpp build `2e97c5f96 (9100)`:
 
 ```
-| model                          |    size |   params | backend  | threads | fa |   test |          t/s |
-| ------------------------------ | ------: | -------: | -------- | ------: | -: | -----: | -----------: |
-| qwen3moe 30B.A3B Q5_K - Medium | 20.2GiB |  30.53 B | BLAS,MTL |       8 |  1 |  pp512 | 582.90 ± 6.1 |
-| qwen3moe 30B.A3B Q5_K - Medium | 20.2GiB |  30.53 B | BLAS,MTL |       8 |  1 |  tg128 |  49.19 ± 0.7 |
+| model                          |      size |  params | backend  | threads | fa |          test |             t/s |
+| ------------------------------ | --------: | ------: | -------- | ------: | -: | ------------: | --------------: |
+| qwen3moe 30B.A3B Q5_K - Medium | 20.23 GiB | 30.53 B | BLAS,MTL |       8 |  1 |         pp512 |   593.80 ± 4.38 |
+| qwen3moe 30B.A3B Q5_K - Medium | 20.23 GiB | 30.53 B | BLAS,MTL |       8 |  1 |        pp2048 |   554.40 ± 0.51 |
+| qwen3moe 30B.A3B Q5_K - Medium | 20.23 GiB | 30.53 B | BLAS,MTL |       8 |  1 |        pp8192 |   409.13 ± 7.86 |
+| qwen3moe 30B.A3B Q5_K - Medium | 20.23 GiB | 30.53 B | BLAS,MTL |       8 |  1 |         tg128 |    50.76 ± 0.21 |
+| qwen3moe 30B.A3B Q5_K - Medium | 20.23 GiB | 30.53 B | BLAS,MTL |       8 |  1 |         tg512 |    50.00 ± 0.11 |
+| qwen3moe 30B.A3B Q5_K - Medium | 20.23 GiB | 30.53 B | BLAS,MTL |       8 |  1 |  pp8192+tg128 |   356.51 ± 2.71 |
 ```
 
-(Above is a real measurement of the base Qwen3-30B-A3B on M1 Max — the coder variant has the same architecture and is expected to behave identically.)
+Reading the numbers:
+- **`pp512` → `pp8192`** (594 → 409 tok/s): prefill cost grows super-linearly. Long prompts dominate wall-clock time, not decode.
+- **`tg128` ≈ `tg512`** (51 vs 50 tok/s): decode is steady regardless of generation length.
+- **`pp8192+tg128`** (357 tok/s effective): combined prefill+decode for a realistic pi turn. This is closer to what you'll feel in practice than `pp512` alone.
 
-`pp512` is how fast it ingests a 512-token prompt; `tg128` is sustained decode at 128 new tokens. MoE throughput moves with quant, batch size, context length, and how much else the GPU is doing.
+MoE throughput moves with quant, batch size, context length, and how much else the GPU is doing.
 
-Overrides:
+Overrides for the wrapper:
 ```bash
 PP=2048 TG=256 REPS=5 ./bench/throughput.sh     # bigger batches, more reps
 MODEL=~/models/other.gguf ./bench/throughput.sh # benchmark a different model
