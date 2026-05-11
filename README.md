@@ -153,6 +153,19 @@ If the first line is `{% macro render_extra_keys(json_dict, handled_keys) %}` yo
 
 Smoke test in pi: ask `explain the purpose of this codebase` from inside this repo. You should see pi actually execute `find` and `read README.md` as tool calls (rendered as `$ find ...` and `read README.md` blocks in the TUI), not raw `<function=bash>` XML.
 
+### Using Tools with pi/qwen
+
+This setup is designed to work with pi's tool calling capabilities. The key configuration for enabling tool usage includes:
+
+1. **Proper Template Loading**: The `fetch-template` script downloads Qwen's official chat template which fixes tool-call format issues in the GGUF's embedded template.
+
+2. **Model Configuration**: The `models.json` configuration file in `config/` properly maps the model ID to the server alias.
+
+3. **Example Usage**: Once the server is running, you can test tool usage in pi by asking it to perform tasks like:
+   ```
+   pi --model qwen3-coder-30b-a3b
+   ```
+
 ## Choosing a quant
 
 | Quant     | File size | Quality | Notes                                 |
@@ -353,21 +366,6 @@ pi_qwen/
 - [Unsloth](https://huggingface.co/unsloth) for the GGUF quants used here
 - [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) for the inference engine
 - [pi](https://pi.dev) for the agent
-
-## Tool Usage with pi/qwen
-
-This setup is designed to work with pi's tool calling capabilities. The key configuration for enabling tool usage includes:
-
-1. **Proper Template Loading**: The `fetch-template` script downloads Qwen's official chat template which fixes tool-call format issues in the GGUF's embedded template.
-
-2. **Model Configuration**: The `models.json` configuration file in `config/` properly maps the model ID to the server alias.
-
-3. **Example Usage**: Once the server is running, you can test tool usage in pi by asking it to perform tasks like:
-   ```
-   pi --model qwen3-coder-30b-a3b
-   ```
-   
-   Then ask questions like "Explain the purpose of this codebase" which should trigger tool calls like `find` and `read README.md`.
 
 ## License
 
