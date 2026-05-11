@@ -1,0 +1,6 @@
+.DS_Store
+*.gguf
+*.safetensors
+.env
+.env.local
+*.log

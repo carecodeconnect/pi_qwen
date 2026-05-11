@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HOST="${HOST:-127.0.0.1}"
+PORT="${PORT:-8080}"
+ALIAS="${ALIAS:-qwen3-30b-a3b}"
+PROMPT="${1:-reply with just: hello}"
+
+curl -fsS "http://${HOST}:${PORT}/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --arg m "$ALIAS" --arg p "$PROMPT" \
+        '{model:$m, messages:[{role:"user", content:$p}]}')" \
+  | jq -r '.choices[0].message.content'

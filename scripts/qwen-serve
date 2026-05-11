@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MODEL="${MODEL:-$HOME/models/qwen3-30b-a3b/Qwen3-30B-A3B-Q5_K_M.gguf}"
+HOST="${HOST:-127.0.0.1}"
+PORT="${PORT:-8080}"
+CTX="${CTX:-32768}"
+ALIAS="${ALIAS:-qwen3-30b-a3b}"
+
+if [[ ! -f "$MODEL" ]]; then
+  echo "error: model not found at $MODEL" >&2
+  echo "set MODEL=/path/to/file.gguf to override" >&2
+  exit 1
+fi
+
+exec llama-server \
+  -m "$MODEL" \
+  --host "$HOST" --port "$PORT" \
+  -ngl 99 -c "$CTX" -fa on --jinja \
+  --temp 0.6 --top-p 0.95 --top-k 20 \
+  -a "$ALIAS"
