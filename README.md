@@ -166,6 +166,25 @@ This setup is designed to work with pi's tool calling capabilities. The key conf
    pi --model qwen3-coder-30b-a3b
    ```
 
+## Layout of this repo
+
+```
+pi_qwen/
+├── README.md            # this file
+├── LICENSE              # MIT
+├── scripts/
+│   ├── qwen-serve       # start llama-server with sensible defaults
+│   ├── qwen-test        # one-shot smoke test
+│   └── fetch-template   # fetch Qwen's official chat template (fixes tool calls)
+├── bench/
+│   └── throughput.sh    # llama-bench wrapper for pp/tg tok/s
+├── demo/
+│   ├── pi-qwen.tape     # vhs script for the README demo
+│   └── smoke.tape       # minimal vhs script to verify the toolchain
+└── config/
+    └── models.json      # pi provider config (copy to ~/.pi/agent/)
+```
+
 ## Choosing a quant
 
 | Quant     | File size | Quality | Notes                                 |
@@ -370,3 +389,7 @@ pi_qwen/
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Acknowledgments
+
+This README was co-written by Claude Code and the Qwen3-Coder-30B-A3B model with Pi.
