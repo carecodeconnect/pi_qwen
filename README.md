@@ -161,6 +161,7 @@ Smoke test in pi: ask `explain the purpose of this codebase` from inside this re
 | **Q5_K_M**| ~21 GB    | Better  | Sweet spot for 64 GB+ Macs.           |
 | Q6_K      | ~25 GB    | Great   | Marginal gain over Q5; rarely worth.  |
 | Q8_0      | ~32 GB    | Near-FP | Diminishing returns; long load times. |
+| Q3_K_M    | ~15 GB    | Fair    | For users with very limited disk space. |
 
 Memory budget at 32k context ≈ model size + ~3 GB KV cache + ~1 GB overhead. Add ~3 GB per doubling of context.
 
