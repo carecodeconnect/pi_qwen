@@ -6,6 +6,12 @@ HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8080}"
 CTX="${CTX:-32768}"
 ALIAS="${ALIAS:-qwen3-coder-30b-a3b}"
+# Qwen's official chat template, not the one embedded in the Unsloth GGUF.
+# The embedded one has tool-calling bugs (model emits inner <function=...>
+# blocks without the outer <tool_call> wrapper), which breaks agents
+# like pi that need structured tool calls.
+# Fetch once with: scripts/fetch-template
+CHAT_TEMPLATE="${CHAT_TEMPLATE:-$HOME/models/qwen3-coder-30b-a3b/templates/qwen3-coder-official.jinja}"
 
 if [[ ! -f "$MODEL" ]]; then
   echo "error: model not found at $MODEL" >&2
@@ -13,9 +19,19 @@ if [[ ! -f "$MODEL" ]]; then
   exit 1
 fi
 
+TEMPLATE_ARGS=()
+if [[ -f "$CHAT_TEMPLATE" ]]; then
+  TEMPLATE_ARGS=(--chat-template-file "$CHAT_TEMPLATE")
+else
+  echo "warning: chat template not found at $CHAT_TEMPLATE" >&2
+  echo "         falling back to GGUF-embedded template — tool calling will be unreliable" >&2
+  echo "         fetch it with: scripts/fetch-template" >&2
+fi
+
 exec llama-server \
   -m "$MODEL" \
   --host "$HOST" --port "$PORT" \
   -ngl 99 -c "$CTX" -fa on --jinja \
+  "${TEMPLATE_ARGS[@]}" \
   --temp 0.6 --top-p 0.95 --top-k 20 \
   -a "$ALIAS"

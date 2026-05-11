@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Download Qwen's official chat template (the one with correct tool-call
+# formatting) from the upstream HuggingFace repo and stash it next to the
+# model. qwen-serve loads this via --chat-template-file.
+#
+# Why: the Unsloth GGUF ships with an embedded template whose tool-call
+# emission is buggy — the model produces <function=...> blocks without
+# wrapping them in <tool_call>, so agents like pi can't parse them back
+# into structured tool calls.
+set -euo pipefail
+
+DEST_DIR="${DEST_DIR:-$HOME/models/qwen3-coder-30b-a3b/templates}"
+DEST="${DEST:-$DEST_DIR/qwen3-coder-official.jinja}"
+TOKCONF_URL="${TOKCONF_URL:-https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct/resolve/main/tokenizer_config.json}"
+
+mkdir -p "$DEST_DIR"
+
+tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
+
+echo "fetching: $TOKCONF_URL"
+curl -fsSL "$TOKCONF_URL" -o "$tmp"
+
+python3 - "$tmp" "$DEST" <<'PY'
+import json, sys
+src, dst = sys.argv[1], sys.argv[2]
+with open(src) as f:
+    d = json.load(f)
+ct = d.get("chat_template")
+if not ct:
+    raise SystemExit("error: tokenizer_config.json has no chat_template field")
+with open(dst, "w") as f:
+    f.write(ct)
+print(f"wrote: {dst}  ({len(ct)} bytes)")
+PY

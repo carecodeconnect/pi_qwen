@@ -4,6 +4,8 @@ Run [pi](https://pi.dev) — a minimal terminal coding agent — against a **loc
 
 No API keys. No cloud round-trips. All inference on your machine.
 
+![pi + Qwen3-Coder demo](demo/pi-qwen.gif)
+
 ## Why this combo
 
 - **Qwen3-Coder-30B-A3B-Instruct** is a Mixture-of-Experts coding model: 30B total parameters, but only ~3B are active per token. That makes it surprisingly fast on consumer Apple Silicon while keeping the quality of a much larger model, and the coder-tuned weights track function-level and repo-level tasks better than the base Qwen3-30B-A3B.
@@ -39,8 +41,8 @@ HF_HUB_ENABLE_HF_TRANSFER=1 hf download \
 
 # 4. Install the helper scripts
 mkdir -p ~/bin
-cp scripts/qwen-serve scripts/qwen-test ~/bin/
-chmod +x ~/bin/qwen-serve ~/bin/qwen-test
+cp scripts/qwen-serve scripts/qwen-test scripts/fetch-template ~/bin/
+chmod +x ~/bin/qwen-serve ~/bin/qwen-test ~/bin/fetch-template
 # Add ~/bin to PATH if you haven't already:
 # echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 
@@ -48,13 +50,16 @@ chmod +x ~/bin/qwen-serve ~/bin/qwen-test
 mkdir -p ~/.pi/agent
 cp config/models.json ~/.pi/agent/models.json
 
-# 6. Start the server (leave it running)
+# 6. Fetch Qwen's official chat template (needed for tool calling — see "Tool calling" below)
+fetch-template
+
+# 7. Start the server (leave it running)
 qwen-serve
 
-# 7. From another terminal, smoke-test
+# 8. From another terminal, smoke-test
 qwen-test "reply with just: hello"
 
-# 8. Run pi against the local model
+# 9. Run pi against the local model
 cd /path/to/some/project
 pi --model qwen3-coder-30b-a3b
 ```
@@ -105,7 +110,8 @@ Key flags it sets:
 - `-ngl 99` — offload all layers to Metal GPU. Free on Apple Silicon since memory is unified.
 - `-c 32768` — 32k context. Bump to 65536/131072 if you need long sessions and have headroom.
 - `-fa on` — flash attention (new llama.cpp requires explicit `on`/`off`/`auto`).
-- `--jinja` — use the model's own chat template.
+- `--jinja` — render the chat template (Qwen's, via `--chat-template-file`).
+- `--chat-template-file <path>` — load Qwen's official chat template instead of the GGUF-embedded one. See [Tool calling](#tool-calling) for why.
 - `--temp 0.6 --top-p 0.95 --top-k 20` — Qwen's official sampler recommendations.
 
 ### `qwen-test`
@@ -116,6 +122,36 @@ qwen-test                          # default: "reply with just: hello"
 qwen-test "what is 2+2"            # custom prompt
 PORT=8081 qwen-test "ping"         # different port
 ```
+
+### `fetch-template`
+Downloads Qwen's official chat template from HuggingFace and writes it to `~/models/qwen3-coder-30b-a3b/templates/qwen3-coder-official.jinja`, where `qwen-serve` looks for it. Run once after install. See [Tool calling](#tool-calling) for why this is needed.
+
+```bash
+fetch-template                                              # defaults
+DEST=~/other/place/template.jinja fetch-template            # custom location
+```
+
+## Tool calling
+
+pi needs the model to emit **structured tool calls**, not text. By default, the Unsloth Q5_K_M GGUF ships with an embedded chat template that has a tool-call bug: the model produces inner `<function=...>` blocks without the outer `<tool_call>` wrapper Qwen expects. llama-server then can't parse those back into the `tool_calls` field of the response, pi sees raw text, no tools execute, and the agent appears to hallucinate that it's running commands.
+
+The fix is to load Qwen's official chat template explicitly via `--chat-template-file`. That's what `fetch-template` downloads and `qwen-serve` wires in.
+
+Verify it's wired up correctly after starting `qwen-serve`:
+
+```bash
+curl -s http://127.0.0.1:8080/props | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+ct = d.get('chat_template','')
+print('template loaded:', bool(ct), 'length:', len(ct))
+print('first line:', ct.split(chr(10))[0])
+"
+```
+
+If the first line is `{% macro render_extra_keys(json_dict, handled_keys) %}` you've got Qwen's official template. If it starts with an Unsloth copyright header, the override didn't take — re-run `fetch-template` and re-check the file path in `qwen-serve`.
+
+Smoke test in pi: ask `explain the purpose of this codebase` from inside this repo. You should see pi actually execute `find` and `read README.md` as tool calls (rendered as `$ find ...` and `read README.md` blocks in the TUI), not raw `<function=bash>` XML.
 
 ## Choosing a quant
 
@@ -151,6 +187,9 @@ The model `id` in `models.json` must match the `-a` alias passed to `llama-serve
 
 ### Garbled or template-broken output
 You probably forgot `--jinja`. Without it llama.cpp falls back to a generic template and Qwen3's chat tokens get mangled.
+
+### Model writes `<function=bash>` instead of actually running tools
+Tool-call format bug in the GGUF's embedded template. Run `fetch-template` and restart `qwen-serve`. See [Tool calling](#tool-calling).
 
 ### Out of memory at load
 Drop the quant (Q5_K_M → Q4_K_M) or the context (`CTX=16384 qwen-serve`).
@@ -229,6 +268,65 @@ Run this once after install to confirm your hardware is performing, and again af
 - **Agent quality** — public coding-agent benchmarks like [Aider's polyglot eval](https://aider.chat/docs/leaderboards/) or HumanEval. They measure the model, not pi-with-the-model.
 - **Your own prompt set** — the only thing that measures *your* workflow. A handful of representative tasks from your real work, run twice, eyeballed.
 
+## Recording the demo
+
+The GIF at the top of this README is generated with [vhs](https://github.com/charmbracelet/vhs) — a scripted terminal recorder. The tape lives in [`demo/pi-qwen.tape`](demo/pi-qwen.tape), so re-running it after a change is one command instead of "perform the demo perfectly again."
+
+### Prerequisites
+
+```bash
+brew install vhs ttyd ffmpeg
+```
+
+`vhs` drives the recording, `ttyd` is the PTY web bridge it talks to, `ffmpeg` does the encode. All three must be on PATH.
+
+### How a recording works
+
+vhs spawns a headless Chrome that connects to a `ttyd`-hosted shell. It executes the `.tape` script keystroke-by-keystroke, screenshots each frame, and renders to the file named in the `Output` directive. **vhs does not start `qwen-serve`** — start it in a separate terminal first, otherwise pi will fail to connect and the recording will end early with `context canceled`.
+
+### Record
+
+```bash
+qwen-serve                              # terminal 1
+vhs demo/pi-qwen.tape                   # terminal 2
+```
+
+Output lands at `demo/pi-qwen.gif`.
+
+### Iterate
+
+`vhs serve` opens a local WebSocket preview — the tape re-renders on save, so you can tune `Sleep` durations and styling without burning a full render each time:
+
+```bash
+vhs serve
+# edit demo/pi-qwen.tape in your editor; preview updates on save
+```
+
+### What the directives do
+
+| Directive | What it controls |
+|---|---|
+| `Output demo/pi-qwen.gif` | Output path. Swap to `.mp4` or `.webm` for smaller files. |
+| `Set FontSize 14` | Render size of glyphs. |
+| `Set Width 1400 / Height 800` | Canvas in px. Bigger = sharper but heavier. |
+| `Set Theme "..."` | One of vhs's bundled themes. |
+| `Set TypingSpeed 50ms` | Per-keystroke delay for `Type`. |
+| `Set PlaybackSpeed 1.5` | Speeds up the final video; useful when decode is slow. |
+| `Hide ... Show` | Run commands without recording (great for `cd` + `clear`). |
+| `Type "..."` | Types a string. |
+| `Enter` | Submits. |
+| `Sleep 60s` | Waits — vhs has no "wait for output" primitive, so you size this empirically. |
+
+### GIF vs MP4
+
+A 60-second decode at 1400×800 produces an **8–20 MB GIF**, which is close to GitHub's README image limit. If it bloats, change one line:
+
+```
+Output demo/pi-qwen.mp4
+```
+
+and embed in the README with `<video src="demo/pi-qwen.mp4" controls></video>`. GitHub renders it inline at roughly 1/10th the size.
+
 ## Layout of this repo
 
 ```
@@ -237,9 +335,13 @@ pi_qwen/
 ├── LICENSE              # MIT
 ├── scripts/
 │   ├── qwen-serve       # start llama-server with sensible defaults
-│   └── qwen-test        # one-shot smoke test
+│   ├── qwen-test        # one-shot smoke test
+│   └── fetch-template   # fetch Qwen's official chat template (fixes tool calls)
 ├── bench/
 │   └── throughput.sh    # llama-bench wrapper for pp/tg tok/s
+├── demo/
+│   ├── pi-qwen.tape     # vhs script for the README demo
+│   └── smoke.tape       # minimal vhs script to verify the toolchain
 └── config/
     └── models.json      # pi provider config (copy to ~/.pi/agent/)
 ```
