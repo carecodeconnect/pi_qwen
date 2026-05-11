@@ -59,6 +59,21 @@ cd /path/to/some/project
 pi --model qwen3-coder-30b-a3b
 ```
 
+## Daily use
+
+Once everything from Quickstart is in place, the day-to-day cycle is two commands in two terminals:
+
+```bash
+# Terminal 1 — start the server (leave it running)
+qwen-serve
+
+# Terminal 2 — drop into pi against the local model
+cd /path/to/your/project
+pi --model qwen3-coder-30b-a3b
+```
+
+Exit pi with `/exit` or Ctrl-D. The server keeps running in Terminal 1 across multiple pi sessions; stop it with Ctrl-C when you're done for the day.
+
 ## How the pieces fit
 
 ```
