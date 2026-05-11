@@ -6,8 +6,8 @@
       "apiKey": "not-needed",
       "models": [
         {
-          "id": "qwen3-30b-a3b",
-          "name": "Qwen3-30B-A3B (local)",
+          "id": "qwen3-coder-30b-a3b",
+          "name": "Qwen3-Coder-30B-A3B-Instruct (local)",
           "reasoning": true,
           "input": ["text"],
           "contextWindow": 32768,

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODEL="${MODEL:-$HOME/models/qwen3-30b-a3b/Qwen3-30B-A3B-Q5_K_M.gguf}"
+MODEL="${MODEL:-$HOME/models/qwen3-coder-30b-a3b/Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf}"
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8080}"
 CTX="${CTX:-32768}"
-ALIAS="${ALIAS:-qwen3-30b-a3b}"
+ALIAS="${ALIAS:-qwen3-coder-30b-a3b}"
 
 if [[ ! -f "$MODEL" ]]; then
   echo "error: model not found at $MODEL" >&2

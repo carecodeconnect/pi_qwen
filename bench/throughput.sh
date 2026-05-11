@@ -8,7 +8,7 @@
 # clean numbers. Otherwise you're measuring contention, not throughput.
 set -euo pipefail
 
-MODEL="${MODEL:-$HOME/models/qwen3-30b-a3b/Qwen3-30B-A3B-Q5_K_M.gguf}"
+MODEL="${MODEL:-$HOME/models/qwen3-coder-30b-a3b/Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf}"
 NGL="${NGL:-99}"
 FA="${FA:-1}"
 # Comma-separated batch sizes for prompt processing and token generation.

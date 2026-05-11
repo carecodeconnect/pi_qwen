@@ -1,12 +1,12 @@
 # pi_qwen
 
-Run [pi](https://pi.dev) — a minimal terminal coding agent — against a **local** [Qwen3-30B-A3B](https://huggingface.co/Qwen/Qwen3-30B-A3B) model served by [llama.cpp](https://github.com/ggml-org/llama.cpp), all on Apple Silicon.
+Run [pi](https://pi.dev) — a minimal terminal coding agent — against a **local** [Qwen3-Coder-30B-A3B-Instruct](https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct) model served by [llama.cpp](https://github.com/ggml-org/llama.cpp), all on Apple Silicon.
 
 No API keys. No cloud round-trips. All inference on your machine.
 
 ## Why this combo
 
-- **Qwen3-30B-A3B** is a Mixture-of-Experts model: 30B total parameters, but only ~3B are active per token. That makes it surprisingly fast on consumer Apple Silicon while keeping the quality of a much larger model.
+- **Qwen3-Coder-30B-A3B-Instruct** is a Mixture-of-Experts coding model: 30B total parameters, but only ~3B are active per token. That makes it surprisingly fast on consumer Apple Silicon while keeping the quality of a much larger model, and the coder-tuned weights track function-level and repo-level tasks better than the base Qwen3-30B-A3B.
 - **llama.cpp** has the most mature Metal backend and ships precompiled via Homebrew — no Xcode required.
 - **pi** is an OpenAI-API-compatible coding agent, so it talks to llama.cpp's HTTP server like any other provider.
 
@@ -15,7 +15,9 @@ No API keys. No cloud round-trips. All inference on your machine.
 - Apple M1 Max, 64 GB RAM, macOS 26.3 (`arm64`)
 - llama.cpp via Homebrew (`b9100`)
 - pi `latest`
-- Quant: `Qwen3-30B-A3B-Q5_K_M.gguf` (~21 GB on disk, ~24 GB resident with 32k context)
+- Quant: `Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf` (~21 GB on disk, ~24 GB resident with 32k context)
+
+Measured throughput on this hardware: **~583 tok/s prefill (pp512)** and **~49 tok/s decode (tg128)**. See [Benchmarking](#benchmarking).
 
 Should work on any Apple Silicon Mac with ≥ 32 GB RAM. Bigger context windows or higher-bit quants need more.
 
@@ -30,10 +32,10 @@ curl -fsSL https://pi.dev/install.sh | sh
 
 # 3. Download the model (~21 GB)
 pip install -U "huggingface_hub[cli]" hf_transfer
-mkdir -p ~/models/qwen3-30b-a3b && cd ~/models/qwen3-30b-a3b
+mkdir -p ~/models/qwen3-coder-30b-a3b && cd ~/models/qwen3-coder-30b-a3b
 HF_HUB_ENABLE_HF_TRANSFER=1 hf download \
-  unsloth/Qwen3-30B-A3B-GGUF \
-  Qwen3-30B-A3B-Q5_K_M.gguf --local-dir .
+  unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF \
+  Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf --local-dir .
 
 # 4. Install the helper scripts
 mkdir -p ~/bin
@@ -54,7 +56,7 @@ qwen-test "reply with just: hello"
 
 # 8. Run pi against the local model
 cd /path/to/some/project
-pi --model qwen3-30b-a3b
+pi --model qwen3-coder-30b-a3b
 ```
 
 ## How the pieces fit
@@ -88,8 +90,8 @@ Key flags it sets:
 - `-ngl 99` — offload all layers to Metal GPU. Free on Apple Silicon since memory is unified.
 - `-c 32768` — 32k context. Bump to 65536/131072 if you need long sessions and have headroom.
 - `-fa on` — flash attention (new llama.cpp requires explicit `on`/`off`/`auto`).
-- `--jinja` — use the model's own chat template (essential for Qwen3's thinking blocks).
-- `--temp 0.6 --top-p 0.95 --top-k 20` — Qwen's official sampler recommendations for thinking mode.
+- `--jinja` — use the model's own chat template.
+- `--temp 0.6 --top-p 0.95 --top-k 20` — Qwen's official sampler recommendations.
 
 ### `qwen-test`
 Single-shot prompt against the running server. Useful for sanity checks.
@@ -130,10 +132,10 @@ pi --list-models
 jq . ~/.pi/agent/models.json   # validate JSON
 curl -s http://127.0.0.1:8080/v1/models | jq   # confirm server is up
 ```
-The model `id` in `models.json` must match the `-a` alias passed to `llama-server` (both are `qwen3-30b-a3b` here).
+The model `id` in `models.json` must match the `-a` alias passed to `llama-server` (both are `qwen3-coder-30b-a3b` here).
 
 ### Garbled or template-broken output
-You probably forgot `--jinja`. Without it llama.cpp falls back to a generic template and Qwen3's thinking tokens get mangled.
+You probably forgot `--jinja`. Without it llama.cpp falls back to a generic template and Qwen3's chat tokens get mangled.
 
 ### Out of memory at load
 Drop the quant (Q5_K_M → Q4_K_M) or the context (`CTX=16384 qwen-serve`).
@@ -149,8 +151,8 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 cargo install --git https://github.com/EricLBuehler/mistral.rs mistralrs-server --features metal
 
 mistralrs-server --port 8080 gguf \
-  -m ~/models/qwen3-30b-a3b \
-  -f Qwen3-30B-A3B-Q5_K_M.gguf
+  -m ~/models/qwen3-coder-30b-a3b \
+  -f Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf
 ```
 
 Then change `id` to `default` in `models.json` and you're off.
@@ -169,13 +171,15 @@ Reports raw inference speed via `llama-bench` — prompt processing (`pp`, prefi
 Output is a markdown table like:
 
 ```
-| model              |   size | params | backend | ngl | fa |          test |          t/s |
-| ------------------ | -----: | -----: | ------- | --: | -: | ------------: | -----------: |
-| qwen3moe 30B Q5_K  | 20.2GB | 30.5B  | Metal   |  99 |  1 |        pp512  | 234.56 ± 1.2 |
-| qwen3moe 30B Q5_K  | 20.2GB | 30.5B  | Metal   |  99 |  1 |        tg128  |  43.21 ± 0.3 |
+| model                          |    size |   params | backend  | threads | fa |   test |          t/s |
+| ------------------------------ | ------: | -------: | -------- | ------: | -: | -----: | -----------: |
+| qwen3moe 30B.A3B Q5_K - Medium | 20.2GiB |  30.53 B | BLAS,MTL |       8 |  1 |  pp512 | 582.90 ± 6.1 |
+| qwen3moe 30B.A3B Q5_K - Medium | 20.2GiB |  30.53 B | BLAS,MTL |       8 |  1 |  tg128 |  49.19 ± 0.7 |
 ```
 
-`pp512` is how fast it ingests a 512-token prompt; `tg128` is sustained decode at 128 new tokens. For Qwen3-30B-A3B on M1 Max with Q5_K_M, expect roughly **150–300 pp** and **35–55 tg**. MoE is uneven — your numbers will move with quant, batch size, and how much else the GPU is doing.
+(Above is a real measurement of the base Qwen3-30B-A3B on M1 Max — the coder variant has the same architecture and is expected to behave identically.)
+
+`pp512` is how fast it ingests a 512-token prompt; `tg128` is sustained decode at 128 new tokens. MoE throughput moves with quant, batch size, context length, and how much else the GPU is doing.
 
 Overrides:
 ```bash
