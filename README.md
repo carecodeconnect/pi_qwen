@@ -30,7 +30,7 @@ The Unsloth GGUF used below is public, so a token isn't strictly required — bu
 1. **Create a token** at https://huggingface.co/settings/tokens. A *Read* token is enough for downloads.
 2. **Install the CLI** (Quickstart step 3 does this, but you can run it now):
    ```bash
-   pip install -U "huggingface_hub[cli]"
+   curl -LsSf https://hf.co/cli/install.sh | bash
    ```
 3. **Log in once** — the CLI stores the token in `~/.cache/huggingface/token` so future commands pick it up automatically:
    ```bash
@@ -53,7 +53,8 @@ brew install llama.cpp
 curl -fsSL https://pi.dev/install.sh | sh
 
 # 3. Download the model (~21 GB)
-pip install -U "huggingface_hub[cli]" hf_transfer
+curl -LsSf https://hf.co/cli/install.sh | bash
+pip install -U hf_transfer
 mkdir -p ~/models/qwen3-coder-30b-a3b && cd ~/models/qwen3-coder-30b-a3b
 HF_HUB_ENABLE_HF_TRANSFER=1 hf download \
   unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF \
