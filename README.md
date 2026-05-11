@@ -23,6 +23,26 @@ Measured throughput on this hardware: **~594 tok/s prefill (pp512)**, **~409 tok
 
 Should work on any Apple Silicon Mac with ≥ 32 GB RAM. Bigger context windows or higher-bit quants need more.
 
+## Hugging Face authentication
+
+The Unsloth GGUF used below is public, so a token isn't strictly required — but logging in lifts anonymous rate limits and is the path of least resistance if you ever swap in a gated model (Meta, Mistral, some Qwen variants). The [HF CLI docs](https://huggingface.co/docs/huggingface_hub/en/guides/cli) cover this in full.
+
+1. **Create a token** at https://huggingface.co/settings/tokens. A *Read* token is enough for downloads.
+2. **Install the CLI** (Quickstart step 3 does this, but you can run it now):
+   ```bash
+   pip install -U "huggingface_hub[cli]"
+   ```
+3. **Log in once** — the CLI stores the token in `~/.cache/huggingface/token` so future commands pick it up automatically:
+   ```bash
+   hf auth login           # paste the token when prompted
+   hf auth whoami          # verify
+   ```
+
+Alternatively, export `HF_TOKEN` in your shell rc — useful in scripted/CI contexts:
+```bash
+export HF_TOKEN=hf_xxxxxxxxxxxx
+```
+
 ## Quickstart
 
 ```bash
