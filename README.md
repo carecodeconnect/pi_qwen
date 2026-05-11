@@ -155,6 +155,43 @@ mistralrs-server --port 8080 gguf \
 
 Then change `id` to `default` in `models.json` and you're off.
 
+## Benchmarking
+
+### Throughput (`bench/throughput.sh`)
+
+Reports raw inference speed via `llama-bench` — prompt processing (`pp`, prefill) and token generation (`tg`, decode), both in tok/s. This measures the model + your hardware, not pi.
+
+```bash
+# Stop qwen-serve first so the GPU isn't contended
+./bench/throughput.sh
+```
+
+Output is a markdown table like:
+
+```
+| model              |   size | params | backend | ngl | fa |          test |          t/s |
+| ------------------ | -----: | -----: | ------- | --: | -: | ------------: | -----------: |
+| qwen3moe 30B Q5_K  | 20.2GB | 30.5B  | Metal   |  99 |  1 |        pp512  | 234.56 ± 1.2 |
+| qwen3moe 30B Q5_K  | 20.2GB | 30.5B  | Metal   |  99 |  1 |        tg128  |  43.21 ± 0.3 |
+```
+
+`pp512` is how fast it ingests a 512-token prompt; `tg128` is sustained decode at 128 new tokens. For Qwen3-30B-A3B on M1 Max with Q5_K_M, expect roughly **150–300 pp** and **35–55 tg**. MoE is uneven — your numbers will move with quant, batch size, and how much else the GPU is doing.
+
+Overrides:
+```bash
+PP=2048 TG=256 REPS=5 ./bench/throughput.sh     # bigger batches, more reps
+MODEL=~/models/other.gguf ./bench/throughput.sh # benchmark a different model
+NGL=0 ./bench/throughput.sh                     # CPU-only baseline (slow)
+```
+
+Run this once after install to confirm your hardware is performing, and again after any quant/flag change to catch regressions.
+
+### Other benchmarks worth knowing about
+
+- **Latency / time-to-first-token** — measures the path pi actually walks. Send timed requests to `/v1/chat/completions` and read the `timings` block llama-server returns.
+- **Agent quality** — public coding-agent benchmarks like [Aider's polyglot eval](https://aider.chat/docs/leaderboards/) or HumanEval. They measure the model, not pi-with-the-model.
+- **Your own prompt set** — the only thing that measures *your* workflow. A handful of representative tasks from your real work, run twice, eyeballed.
+
 ## Layout of this repo
 
 ```
@@ -164,6 +201,8 @@ pi_qwen/
 ├── scripts/
 │   ├── qwen-serve       # start llama-server with sensible defaults
 │   └── qwen-test        # one-shot smoke test
+├── bench/
+│   └── throughput.sh    # llama-bench wrapper for pp/tg tok/s
 └── config/
     └── models.json      # pi provider config (copy to ~/.pi/agent/)
 ```
