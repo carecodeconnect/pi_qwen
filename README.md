@@ -23,6 +23,15 @@ Measured throughput on this hardware: **~594 tok/s prefill (pp512)**, **~409 tok
 
 Should work on any Apple Silicon Mac with ≥ 32 GB RAM. Bigger context windows or higher-bit quants need more.
 
+### Why Qwen3-Coder (and not Devstral)
+
+We A/B-tested **Devstral-Small-2507** (Mistral × All Hands AI, 24B dense, Unsloth UD-Q5_K_XL) on the same M1 Max as a candidate daily driver. Two problems showed up immediately:
+
+- **Decode is ~5× slower.** Dense 24B activates every parameter per token, so Apple Silicon's memory bandwidth becomes the bottleneck. Observed in pi: ~10.9 tok/s decode vs Qwen3-Coder's ~51 tok/s. Prefill drops similarly (~91 tok/s vs ~594 tok/s on short prompts).
+- **Tool-call coherence broke down.** Asked to enumerate the repo, Devstral emitted a runaway `find` whose `-name` clauses looped duplicates for hundreds of patterns before truncation — the kind of degenerate output that makes an agent unusable, not just slow.
+
+So Qwen3-Coder's MoE architecture (3B active of 30B) plus its agent-tuned coder weights win on both axes here. The `scripts/devstral-serve` wrapper and the `local-devstral-small-2507` entry in `config/models.json` are kept so anyone can reproduce the comparison on their own hardware/workload — they just aren't the default. `gpt-oss-20b` is wired up the same way but hasn't been evaluated end-to-end yet.
+
 ## Python tooling (uv)
 
 The only Python this repo needs is the `hf` CLI (from `huggingface_hub`) and `hf_transfer` for fast multi-stream downloads. Both live in a uv-managed venv pinned by `pyproject.toml` / `uv.lock` — no global `pip install`, no PEP 668 fights with system Python.
