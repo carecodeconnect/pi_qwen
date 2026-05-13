@@ -10,7 +10,7 @@ MODEL="${MODEL:-$HOME/models/devstral-small-2507/Devstral-Small-2507-UD-Q5_K_XL.
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8080}"
 CTX="${CTX:-131072}"
-ALIAS="${ALIAS:-devstral-small-2507}"
+ALIAS="${ALIAS:-local-devstral-small-2507}"
 
 if [[ ! -f "$MODEL" ]]; then
   echo "error: model not found at $MODEL" >&2

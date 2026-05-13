@@ -15,7 +15,7 @@
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         },
         {
-          "id": "gpt-oss-20b",
+          "id": "local-gpt-oss-20b",
           "name": "gpt-oss-20b (local)",
           "reasoning": true,
           "input": ["text"],
@@ -24,7 +24,7 @@
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         },
         {
-          "id": "devstral-small-2507",
+          "id": "local-devstral-small-2507",
           "name": "Devstral-Small-2507 (local)",
           "reasoning": false,
           "input": ["text"],

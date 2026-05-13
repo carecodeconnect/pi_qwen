@@ -9,7 +9,7 @@ MODEL="${MODEL:-$HOME/models/gpt-oss-20b/gpt-oss-20b-mxfp4.gguf}"
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8080}"
 CTX="${CTX:-131072}"
-ALIAS="${ALIAS:-gpt-oss-20b}"
+ALIAS="${ALIAS:-local-gpt-oss-20b}"
 
 if [[ ! -f "$MODEL" ]]; then
   echo "error: model not found at $MODEL" >&2
