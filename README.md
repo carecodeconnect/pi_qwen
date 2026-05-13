@@ -52,9 +52,8 @@ The `scripts/devstral-serve` wrapper and the `local-devstral-small-2507` entry i
 The only Python this repo needs is the `hf` CLI (from `huggingface_hub`) and `hf_transfer` for fast multi-stream downloads. Both live in a uv-managed venv pinned by `pyproject.toml` / `uv.lock` — no global `pip install`, no PEP 668 fights with system Python.
 
 ```bash
-# One-time setup
+# One-time setup (run from inside this repo, wherever you cloned it)
 curl -LsSf https://astral.sh/uv/install.sh | sh    # install uv if you don't have it
-cd ~/projects/pi_sandbox
 uv sync                                             # creates .venv/, installs deps from lockfile
 
 # Run hf commands inside the project venv
@@ -62,9 +61,9 @@ uv run hf --version
 HF_HUB_ENABLE_HF_TRANSFER=1 uv run hf download <repo> <file> --local-dir <dest>
 ```
 
-If you'd rather have `hf` on PATH without prefixing `uv run`, two options:
-- `uv tool install huggingface_hub` — puts `hf` in `~/.local/bin` via uv's tool venv.
-- Or activate the project venv: `source ~/projects/pi_sandbox/.venv/bin/activate`.
+If you'd rather have `hf` on PATH without prefixing `uv run` (handy for `cd`-ing into your model directory and running downloads from there), two options:
+- `uv tool install huggingface_hub` — puts `hf` in `~/.local/bin` via uv's tool venv, available globally.
+- Activate the project venv once per shell session: `source .venv/bin/activate` (from the repo root).
 
 ## Hugging Face authentication
 
@@ -95,14 +94,16 @@ curl -fsSL https://pi.dev/install.sh | sh
 # 3. Install uv (Python project/dependency manager) if you don't have it
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# 4. Sync this repo's Python deps — gets you `hf` (huggingface_hub CLI) and
-#    hf_transfer (multi-stream downloads), pinned and reproducible
-cd ~/projects/pi_sandbox && uv sync
+# 4. From inside the cloned repo, sync Python deps — gets you `hf`
+#    (huggingface_hub CLI) and hf_transfer (multi-stream downloads),
+#    pinned and reproducible. Then activate the venv so `hf` is on PATH.
+uv sync
+source .venv/bin/activate
 
-# 5. Download the model (~21 GB). `uv run` invokes hf from the project venv
+# 5. Download the model (~21 GB). With the venv activated, `hf` works anywhere.
 mkdir -p ~/models/qwen3-coder-30b-a3b && cd ~/models/qwen3-coder-30b-a3b
-HF_HUB_ENABLE_HF_TRANSFER=1 uv run --project ~/projects/pi_sandbox \
-  hf download unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF \
+HF_HUB_ENABLE_HF_TRANSFER=1 hf download \
+  unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF \
   Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf --local-dir .
 
 # 6. Install the helper scripts
@@ -221,9 +222,9 @@ DEST=~/other/place/template.jinja fetch-template            # custom location
 Serves OpenAI's [`gpt-oss-20b`](https://huggingface.co/openai/gpt-oss-20b) — a 21B MoE (~3.6B active) with reasoning and built-in tool calling. The GGUF ships in MXFP4 format (~12 GB), the native quant OpenAI released; no further quantization needed and no chat-template override required.
 
 ```bash
-# Install once
+# Install once (assumes `hf` on PATH — see Python tooling)
 mkdir -p ~/models/gpt-oss-20b
-HF_HUB_ENABLE_HF_TRANSFER=1 uv run --project ~/projects/pi_sandbox hf download \
+HF_HUB_ENABLE_HF_TRANSFER=1 hf download \
   ggml-org/gpt-oss-20b-GGUF gpt-oss-20b-mxfp4.gguf \
   --local-dir ~/models/gpt-oss-20b
 cp scripts/gptoss-serve ~/bin/ && chmod +x ~/bin/gptoss-serve
@@ -243,9 +244,9 @@ The `local-` prefix on the model id avoids a collision with pi's built-in `gpt-o
 Serves Mistral × All Hands AI's [`Devstral-Small-2507`](https://huggingface.co/mistralai/Devstral-Small-2507) — a 24B dense model purpose-tuned for agentic coding (SWE-bench leaderboard). Uses Unsloth's dynamic Q5 quant (UD-Q5_K_XL, ~17 GB) for a fair comparison against the Qwen Q5_K_M baseline.
 
 ```bash
-# Install once
+# Install once (assumes `hf` on PATH — see Python tooling)
 mkdir -p ~/models/devstral-small-2507
-HF_HUB_ENABLE_HF_TRANSFER=1 uv run --project ~/projects/pi_sandbox hf download \
+HF_HUB_ENABLE_HF_TRANSFER=1 hf download \
   unsloth/Devstral-Small-2507-GGUF Devstral-Small-2507-UD-Q5_K_XL.gguf \
   --local-dir ~/models/devstral-small-2507
 cp scripts/devstral-serve ~/bin/ && chmod +x ~/bin/devstral-serve
