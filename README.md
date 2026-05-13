@@ -19,18 +19,32 @@ No API keys. No cloud round-trips. All inference on your machine.
 - pi `latest`
 - Quant: `Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf` (~21 GB on disk, ~37 GB resident with the default 131k context)
 
-Measured throughput on this hardware: **~594 tok/s prefill (pp512)**, **~409 tok/s prefill (pp8192)**, and **~51 tok/s decode (tg128)**. See [Benchmarking](#benchmarking).
+Measured throughput on this hardware (M1 Max, llama.cpp `b9100`, `-fa 1 -ngl 99 -r 3`):
+
+| test                | Qwen3-Coder-30B-A3B<br>(Q5_K_M, 20 GiB) | gpt-oss-20b<br>(MXFP4, 11 GiB) |
+| ------------------- | --------------------------------------: | -----------------------------: |
+| pp512 (prefill)     |                          593.80 ± 4.38 |                **755.59 ± 0.90** |
+| pp2048              |                          554.40 ± 0.51 |                **741.53 ± 1.33** |
+| pp8192              |                          409.13 ± 7.86 |                **650.61 ± 7.65** |
+| tg128 (decode)      |                           50.76 ± 0.21 |                 **59.67 ± 0.46** |
+| tg512               |                           50.00 ± 0.11 |                 **60.40 ± 0.31** |
+| pp8192+tg128        |                          356.51 ± 2.71 |                **544.15 ± 3.87** |
+
+gpt-oss-20b is **~1.2–1.6× faster** across the board; the gap widens at long contexts because gpt-oss has fewer total parameters (21 B vs 30 B) despite both being MoE. See [Benchmarking](#benchmarking) for the raw `llama-bench` output and how to reproduce.
 
 Should work on any Apple Silicon Mac with ≥ 32 GB RAM. Bigger context windows or higher-bit quants need more.
 
-### Why Qwen3-Coder (and not Devstral)
+### Model comparison
 
-We A/B-tested **Devstral-Small-2507** (Mistral × All Hands AI, 24B dense, Unsloth UD-Q5_K_XL) on the same M1 Max as a candidate daily driver. Two problems showed up immediately:
+Three candidates were tested on the same M1 Max with pi as the agent harness:
 
-- **Decode is ~5× slower.** Dense 24B activates every parameter per token, so Apple Silicon's memory bandwidth becomes the bottleneck. Observed in pi: ~10.9 tok/s decode vs Qwen3-Coder's ~51 tok/s. Prefill drops similarly (~91 tok/s vs ~594 tok/s on short prompts).
-- **Tool-call coherence broke down.** Asked to enumerate the repo, Devstral emitted a runaway `find` whose `-name` clauses looped duplicates for hundreds of patterns before truncation — the kind of degenerate output that makes an agent unusable, not just slow.
+- **Qwen3-Coder-30B-A3B-Instruct** (MoE, ~3 B active of 30 B, Q5_K_M, ~20 GiB) — **current default**. Coder-tuned weights, strong tool-call coherence, balanced speed and quality on real coding tasks.
+- **gpt-oss-20b** (MoE, ~3.6 B active of 21 B, MXFP4, ~11 GiB) — **competitive**. Clean tool calls, ~1.2–1.6× faster than Qwen on the same prompt sweep (see [Tested on](#tested-on)). Generalist-reasoning-tuned rather than coder-specialized; survey and Q&A feel just as good, dense codegen quality has not been fully evaluated.
+- **Devstral-Small-2507** (24 B dense, Unsloth UD-Q5_K_XL, ~17 GiB) — **not recommended.** Two failure modes:
+  - Decode ~5× slower than Qwen (~11 tok/s vs ~51 tok/s) — dense 24 B saturates Apple Silicon's memory bandwidth.
+  - Tool-call coherence broke down: asked to enumerate the repo, Devstral emitted a runaway `find` whose `-name` clauses looped duplicates for hundreds of patterns before truncation.
 
-So Qwen3-Coder's MoE architecture (3B active of 30B) plus its agent-tuned coder weights win on both axes here. The `scripts/devstral-serve` wrapper and the `local-devstral-small-2507` entry in `config/models.json` are kept so anyone can reproduce the comparison on their own hardware/workload — they just aren't the default. `gpt-oss-20b` is wired up the same way but hasn't been evaluated end-to-end yet.
+The `scripts/devstral-serve` wrapper and the `local-devstral-small-2507` entry in `config/models.json` are kept so the comparison stays reproducible — the GGUF just isn't downloaded by default.
 
 ## Python tooling (uv)
 
@@ -412,8 +426,9 @@ llama-bench \
   -ngl 99 -fa 1 -r 3
 ```
 
-Real run on Apple M1 Max, 64 GB, llama.cpp build `2e97c5f96 (9100)`:
+Real runs on Apple M1 Max, 64 GB, llama.cpp build `2e97c5f96 (9100)`:
 
+**Qwen3-Coder-30B-A3B (Q5_K_M, 20.23 GiB, 30.53 B params, 3 B active)**
 ```
 | model                          |      size |  params | backend  | threads | fa |          test |             t/s |
 | ------------------------------ | --------: | ------: | -------- | ------: | -: | ------------: | --------------: |
@@ -425,12 +440,23 @@ Real run on Apple M1 Max, 64 GB, llama.cpp build `2e97c5f96 (9100)`:
 | qwen3moe 30B.A3B Q5_K - Medium | 20.23 GiB | 30.53 B | BLAS,MTL |       8 |  1 |  pp8192+tg128 |   356.51 ± 2.71 |
 ```
 
-Reading the numbers:
-- **`pp512` → `pp8192`** (594 → 409 tok/s): prefill cost grows super-linearly. Long prompts dominate wall-clock time, not decode.
-- **`tg128` ≈ `tg512`** (51 vs 50 tok/s): decode is steady regardless of generation length.
-- **`pp8192+tg128`** (357 tok/s effective): combined prefill+decode for a realistic pi turn. This is closer to what you'll feel in practice than `pp512` alone.
+**gpt-oss-20b (MXFP4, 11.27 GiB, 20.91 B params, ~3.6 B active)**
+```
+| model                 |      size |  params | backend  | threads | fa |          test |             t/s |
+| --------------------- | --------: | ------: | -------- | ------: | -: | ------------: | --------------: |
+| gpt-oss 20B MXFP4 MoE | 11.27 GiB | 20.91 B | BLAS,MTL |       8 |  1 |         pp512 |   755.59 ± 0.90 |
+| gpt-oss 20B MXFP4 MoE | 11.27 GiB | 20.91 B | BLAS,MTL |       8 |  1 |        pp2048 |   741.53 ± 1.33 |
+| gpt-oss 20B MXFP4 MoE | 11.27 GiB | 20.91 B | BLAS,MTL |       8 |  1 |        pp8192 |   650.61 ± 7.65 |
+| gpt-oss 20B MXFP4 MoE | 11.27 GiB | 20.91 B | BLAS,MTL |       8 |  1 |         tg128 |    59.67 ± 0.46 |
+| gpt-oss 20B MXFP4 MoE | 11.27 GiB | 20.91 B | BLAS,MTL |       8 |  1 |         tg512 |    60.40 ± 0.31 |
+| gpt-oss 20B MXFP4 MoE | 11.27 GiB | 20.91 B | BLAS,MTL |       8 |  1 |  pp8192+tg128 |   544.15 ± 3.87 |
+```
 
-MoE throughput moves with quant, batch size, context length, and how much else the GPU is doing.
+Reading the numbers:
+- **Prefill scaling.** Both models slow down with longer prompts (Qwen 594→409, gpt-oss 756→651 from pp512 to pp8192). The drop is gentler on gpt-oss — fewer total parameters means less compute per token at prefill time.
+- **Decode is steady within a model** (`tg128` ≈ `tg512`). It's bandwidth-bound, not compute-bound, so generation length barely matters.
+- **gpt-oss is ~1.2–1.6× faster across the sweep**, with the gap widest at `pp8192+tg128` — the agent-realistic combined run. For long-context tool-using sessions, that's the headline number.
+- **MoE throughput moves with quant, batch size, context length, and what else is on the GPU.** Reproduce both runs on your own hardware before reading too much into the deltas.
 
 Overrides for the wrapper:
 ```bash
