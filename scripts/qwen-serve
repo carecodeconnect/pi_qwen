@@ -4,7 +4,7 @@ set -euo pipefail
 MODEL="${MODEL:-$HOME/models/qwen3-coder-30b-a3b/Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf}"
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8080}"
-CTX="${CTX:-32768}"
+CTX="${CTX:-131072}"
 ALIAS="${ALIAS:-qwen3-coder-30b-a3b}"
 # Qwen's official chat template, not the one embedded in the Unsloth GGUF.
 # The embedded one has tool-calling bugs (model emits inner <function=...>

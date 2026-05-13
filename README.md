@@ -17,7 +17,7 @@ No API keys. No cloud round-trips. All inference on your machine.
 - Apple M1 Max, 64 GB RAM, macOS 26.3 (`arm64`)
 - llama.cpp via Homebrew (`b9100`)
 - pi `latest`
-- Quant: `Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf` (~21 GB on disk, ~24 GB resident with 32k context)
+- Quant: `Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf` (~21 GB on disk, ~37 GB resident with the default 131k context)
 
 Measured throughput on this hardware: **~594 tok/s prefill (pp512)**, **~409 tok/s prefill (pp8192)**, and **~51 tok/s decode (tg128)**. See [Benchmarking](#benchmarking).
 
@@ -122,15 +122,16 @@ pi sees an OpenAI-compatible endpoint. llama-server does the actual inference on
 Starts `llama-server` with the flag set this repo has settled on. Honors env-var overrides:
 
 ```bash
-qwen-serve                                  # defaults
-PORT=8081 CTX=65536 qwen-serve              # bigger context, different port
+qwen-serve                                  # defaults (131k context)
+PORT=8081 CTX=65536 qwen-serve              # smaller context, different port
+CTX=262144 qwen-serve                       # push it — uses ~24 GB KV cache
 MODEL=~/models/other.gguf qwen-serve        # swap the model file
 ALIAS=my-model qwen-serve                   # change the model id pi sees
 ```
 
 Key flags it sets:
 - `-ngl 99` — offload all layers to Metal GPU. Free on Apple Silicon since memory is unified.
-- `-c 32768` — 32k context. Bump to 65536/131072 if you need long sessions and have headroom.
+- `-c 131072` — 131k context. Sized for a 64 GB Apple Silicon Mac; drop to 32768/65536 on 32 GB machines, or bump to 262144 if you have the headroom.
 - `-fa on` — flash attention (new llama.cpp requires explicit `on`/`off`/`auto`).
 - `--jinja` — render the chat template (Qwen's, via `--chat-template-file`).
 - `--chat-template-file <path>` — load Qwen's official chat template instead of the GGUF-embedded one. See [Tool calling](#tool-calling) for why.
@@ -198,7 +199,16 @@ This setup is designed to work with pi's tool calling capabilities. The key conf
 | Q8_0      | ~32 GB    | Near-FP | Diminishing returns; long load times. |
 | Q3_K_M    | ~15 GB    | Fair    | For users with very limited disk space. |
 
-Memory budget at 32k context ≈ model size + ~3 GB KV cache + ~1 GB overhead. Add ~3 GB per doubling of context.
+Memory budget ≈ model size + KV cache + ~1 GB overhead. KV cache for this model is ~96 KB/token at fp16, so:
+
+| Context | KV cache | Total RAM (Q5_K_M) | Fits on   |
+|--------:|---------:|-------------------:|-----------|
+|     32k |    ~3 GB |             ~25 GB | 32 GB Mac |
+|     64k |    ~6 GB |             ~28 GB | 32 GB Mac (tight) |
+| **131k**|   **~12 GB** |          **~34 GB** | **64 GB Mac (default)** |
+|    262k |   ~24 GB |             ~46 GB | 64 GB Mac (aggressive) |
+
+Tip: add `--cache-type-k q8_0 --cache-type-v q8_0` to `llama-server` (in `qwen-serve`) to halve KV-cache memory at negligible quality cost — that lets a 64 GB Mac comfortably reach 262k, or push to ~512k.
 
 ## Troubleshooting
 
@@ -253,7 +263,7 @@ You probably forgot `--jinja`. Without it llama.cpp falls back to a generic temp
 Tool-call format bug in the GGUF's embedded template. Run `fetch-template` and restart `qwen-serve`. See [Tool calling](#tool-calling).
 
 ### Out of memory at load
-Drop the quant (Q5_K_M → Q4_K_M) or the context (`CTX=16384 qwen-serve`).
+The default context is 131k, sized for a 64 GB Mac. On a 32 GB Mac, drop it: `CTX=32768 qwen-serve` (or `CTX=65536` if tight is OK). Failing that, drop the quant (Q5_K_M → Q4_K_M). You can also halve KV-cache memory with `--cache-type-k q8_0 --cache-type-v q8_0` — see [Choosing a quant](#choosing-a-quant).
 
 ## Alternative: mistral.rs (Rust)
 
