@@ -8,7 +8,7 @@ Set TypingSpeed 50ms
 Set PlaybackSpeed 1.5
 
 Hide
-Type "cd ~/projects/pi_qwen"
+Type "cd ~/projects/pi_sandbox"
 Enter
 Type "clear"
 Enter

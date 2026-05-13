@@ -233,7 +233,7 @@ wheels = [
 ]
 
 [[package]]
-name = "pi-qwen"
+name = "pi-sandbox"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
