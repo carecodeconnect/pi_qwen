@@ -23,19 +23,34 @@ Measured throughput on this hardware: **~594 tok/s prefill (pp512)**, **~409 tok
 
 Should work on any Apple Silicon Mac with ≥ 32 GB RAM. Bigger context windows or higher-bit quants need more.
 
+## Python tooling (uv)
+
+The only Python this repo needs is the `hf` CLI (from `huggingface_hub`) and `hf_transfer` for fast multi-stream downloads. Both live in a uv-managed venv pinned by `pyproject.toml` / `uv.lock` — no global `pip install`, no PEP 668 fights with system Python.
+
+```bash
+# One-time setup
+curl -LsSf https://astral.sh/uv/install.sh | sh    # install uv if you don't have it
+cd ~/projects/pi_qwen
+uv sync                                             # creates .venv/, installs deps from lockfile
+
+# Run hf commands inside the project venv
+uv run hf --version
+HF_HUB_ENABLE_HF_TRANSFER=1 uv run hf download <repo> <file> --local-dir <dest>
+```
+
+If you'd rather have `hf` on PATH without prefixing `uv run`, two options:
+- `uv tool install huggingface_hub` — puts `hf` in `~/.local/bin` via uv's tool venv.
+- Or activate the project venv: `source ~/projects/pi_qwen/.venv/bin/activate`.
+
 ## Hugging Face authentication
 
 The Unsloth GGUF used below is public, so a token isn't strictly required — but logging in lifts anonymous rate limits and is the path of least resistance if you ever swap in a gated model (Meta, Mistral, some Qwen variants). The [HF CLI docs](https://huggingface.co/docs/huggingface_hub/en/guides/cli) cover this in full.
 
 1. **Create a token** at https://huggingface.co/settings/tokens. A *Read* token is enough for downloads.
-2. **Install the CLI** (Quickstart step 3 does this, but you can run it now):
+2. **Log in once** — `huggingface_hub` stores the token in `~/.cache/huggingface/token` so future commands pick it up automatically:
    ```bash
-   curl -LsSf https://hf.co/cli/install.sh | bash
-   ```
-3. **Log in once** — the CLI stores the token in `~/.cache/huggingface/token` so future commands pick it up automatically:
-   ```bash
-   hf auth login           # paste the token when prompted
-   hf auth whoami          # verify
+   uv run hf auth login           # paste the token when prompted
+   uv run hf auth whoami          # verify
    ```
 
 Alternatively, export `HF_TOKEN` in your shell rc — useful in scripted/CI contexts:
@@ -53,35 +68,40 @@ brew install llama.cpp
 #    if you don't have it, or hit "pi install fails" in Troubleshooting)
 curl -fsSL https://pi.dev/install.sh | sh
 
-# 3. Download the model (~21 GB)
-curl -LsSf https://hf.co/cli/install.sh | bash
-pip install -U hf_transfer
+# 3. Install uv (Python project/dependency manager) if you don't have it
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 4. Sync this repo's Python deps — gets you `hf` (huggingface_hub CLI) and
+#    hf_transfer (multi-stream downloads), pinned and reproducible
+cd ~/projects/pi_qwen && uv sync
+
+# 5. Download the model (~21 GB). `uv run` invokes hf from the project venv
 mkdir -p ~/models/qwen3-coder-30b-a3b && cd ~/models/qwen3-coder-30b-a3b
-HF_HUB_ENABLE_HF_TRANSFER=1 hf download \
-  unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF \
+HF_HUB_ENABLE_HF_TRANSFER=1 uv run --project ~/projects/pi_qwen \
+  hf download unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF \
   Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf --local-dir .
 
-# 4. Install the helper scripts
+# 6. Install the helper scripts
 mkdir -p ~/bin
 cp scripts/qwen-serve scripts/qwen-test scripts/fetch-template ~/bin/
 chmod +x ~/bin/qwen-serve ~/bin/qwen-test ~/bin/fetch-template
 # Add ~/bin to PATH if you haven't already:
 # echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 
-# 5. Install the pi provider config
+# 7. Install the pi provider config
 mkdir -p ~/.pi/agent
 cp config/models.json ~/.pi/agent/models.json
 
-# 6. Fetch Qwen's official chat template (needed for tool calling — see "Tool calling" below)
+# 8. Fetch Qwen's official chat template (needed for tool calling — see "Tool calling" below)
 fetch-template
 
-# 7. Start the server (leave it running)
+# 9. Start the server (leave it running)
 qwen-serve
 
-# 8. From another terminal, smoke-test
+# 10. From another terminal, smoke-test
 qwen-test "reply with just: hello"
 
-# 9. Run pi against the local model
+# 11. Run pi against the local model
 cd /path/to/some/project
 pi --model qwen3-coder-30b-a3b
 ```
@@ -141,10 +161,21 @@ Key flags it sets:
 Single-shot prompt against the running server. Useful for sanity checks.
 
 ```bash
-qwen-test                          # default: "reply with just: hello"
-qwen-test "what is 2+2"            # custom prompt
-PORT=8081 qwen-test "ping"         # different port
+qwen-test                                  # default: "reply with just: hello"
+qwen-test "what is 2+2"                    # custom prompt
+ALIAS=gpt-oss-20b qwen-test "ping"         # works against any alias
 ```
+
+### `tool-call-test`
+Model-agnostic check that the running server returns structured `tool_calls` (the same field pi reads). Defines a `get_weather` tool and prompts the model to call it; passes only if `choices[0].message.tool_calls` is present in the response.
+
+```bash
+ALIAS=qwen3-coder-30b-a3b   tool-call-test       # against Qwen
+ALIAS=gpt-oss-20b           tool-call-test       # against gpt-oss
+ALIAS=devstral-small-2507   tool-call-test       # against Devstral
+```
+
+If this fails, pi will not see tool calls from that model either — fix the chat-template wiring before running pi.
 
 ### `fetch-template`
 Downloads Qwen's official chat template from HuggingFace and writes it to `~/models/qwen3-coder-30b-a3b/templates/qwen3-coder-official.jinja`, where `qwen-serve` looks for it. Run once after install. See [Tool calling](#tool-calling) for why this is needed.
@@ -153,6 +184,46 @@ Downloads Qwen's official chat template from HuggingFace and writes it to `~/mod
 fetch-template                                              # defaults
 DEST=~/other/place/template.jinja fetch-template            # custom location
 ```
+
+### `gptoss-serve` (alternate model)
+Serves OpenAI's [`gpt-oss-20b`](https://huggingface.co/openai/gpt-oss-20b) — a 21B MoE (~3.6B active) with reasoning and built-in tool calling. The GGUF ships in MXFP4 format (~12 GB), the native quant OpenAI released; no further quantization needed and no chat-template override required.
+
+```bash
+# Install once
+mkdir -p ~/models/gpt-oss-20b
+HF_HUB_ENABLE_HF_TRANSFER=1 uv run --project ~/projects/pi_qwen hf download \
+  ggml-org/gpt-oss-20b-GGUF gpt-oss-20b-mxfp4.gguf \
+  --local-dir ~/models/gpt-oss-20b
+cp scripts/gptoss-serve ~/bin/ && chmod +x ~/bin/gptoss-serve
+
+# Serve (only one llama-server can hold port 8080 at a time — stop qwen-serve first)
+gptoss-serve
+
+# In pi
+pi --model gpt-oss-20b
+```
+
+Defaults: `CTX=131072`, sampler temp 1.0 / top-p 1.0 (gpt-oss is reasoning-tuned and recommends near-deterministic sampling controlled by `reasoning_effort` in the system prompt rather than temperature).
+
+### `devstral-serve` (alternate model)
+Serves Mistral × All Hands AI's [`Devstral-Small-2507`](https://huggingface.co/mistralai/Devstral-Small-2507) — a 24B dense model purpose-tuned for agentic coding (SWE-bench leaderboard). Uses Unsloth's dynamic Q5 quant (UD-Q5_K_XL, ~17 GB) for a fair comparison against the Qwen Q5_K_M baseline.
+
+```bash
+# Install once
+mkdir -p ~/models/devstral-small-2507
+HF_HUB_ENABLE_HF_TRANSFER=1 uv run --project ~/projects/pi_qwen hf download \
+  unsloth/Devstral-Small-2507-GGUF Devstral-Small-2507-UD-Q5_K_XL.gguf \
+  --local-dir ~/models/devstral-small-2507
+cp scripts/devstral-serve ~/bin/ && chmod +x ~/bin/devstral-serve
+
+# Serve (stop other llama-server processes first)
+devstral-serve
+
+# In pi
+pi --model devstral-small-2507
+```
+
+Defaults: `CTX=131072`, sampler temp 0.15 (Mistral's recommendation — lower than Qwen's 0.6 for agent stability). The GGUF's embedded Mistral chat template handles tool calls correctly out of the box; no `--chat-template-file` override needed.
 
 ## Tool calling
 
@@ -213,12 +284,21 @@ Tip: add `--cache-type-k q8_0 --cache-type-v q8_0` to `llama-server` (in `qwen-s
 ## Troubleshooting
 
 ### Download is glacial (single-digit MB/s)
-Set up `hf_transfer` and an HF token:
+Make sure `hf_transfer` is being engaged. If you're using the uv flow (recommended), it's already pinned in `pyproject.toml` — just remember the env var:
+
 ```bash
-pip install -U hf_transfer
-export HF_HUB_ENABLE_HF_TRANSFER=1
-export HF_TOKEN=hf_xxxxxxxxxxxx   # from https://huggingface.co/settings/tokens
+HF_HUB_ENABLE_HF_TRANSFER=1 uv run hf download ...
 ```
+
+On a typical home connection you should see bursts of 50–80 MB/s once the chunked transfer warms up.
+
+If you skipped the uv project and used the standalone `hf` installer instead, `pip install hf_transfer` fails on macOS with PEP 668 ("externally-managed environment"). Install into the hf installer's own venv instead:
+
+```bash
+~/.hf-cli/venv/bin/pip install -U hf_transfer
+```
+
+For private/gated repos, set `HF_TOKEN` (from https://huggingface.co/settings/tokens) or run `uv run hf auth login` once.
 
 ### pi install fails with `EACCES` or `EBADENGINE`
 The installer is a thin wrapper around `npm install -g @earendil-works/pi-coding-agent`, so it needs a recent Node *and* a user-writable npm prefix. Two failure modes:
@@ -405,8 +485,11 @@ pi_qwen/
 ├── README.md            # this file
 ├── LICENSE              # MIT
 ├── scripts/
-│   ├── qwen-serve       # start llama-server with sensible defaults
-│   ├── qwen-test        # one-shot smoke test
+│   ├── qwen-serve       # start llama-server for Qwen3-Coder-30B-A3B
+│   ├── gptoss-serve     # alternate: OpenAI gpt-oss-20b
+│   ├── devstral-serve   # alternate: Mistral Devstral-Small-2507
+│   ├── qwen-test        # one-shot chat-completion smoke test
+│   ├── tool-call-test   # model-agnostic check that pi-style tool_calls fire
 │   └── fetch-template   # fetch Qwen's official chat template (fixes tool calls)
 ├── bench/
 │   └── throughput.sh    # llama-bench wrapper for pp/tg tok/s

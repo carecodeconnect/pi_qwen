@@ -12,3 +12,8 @@ demo/smoke.gif
 # Added by cargo
 
 /target
+
+# uv project
+.venv/
+__pycache__/
+*.pyc

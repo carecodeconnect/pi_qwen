@@ -1,0 +1,15 @@
+[project]
+name = "pi-qwen"
+version = "0.1.0"
+description = "Tooling for running Qwen3-Coder / gpt-oss / Devstral locally with pi"
+requires-python = ">=3.12"
+dependencies = [
+    # `hf` CLI lives in huggingface_hub. We pin >=1.14 because 1.x ships
+    # hf-xet and the CLI entry point by default — no extras needed
+    # (the [cli] extra was removed in 1.x).
+    "huggingface-hub>=1.14.0",
+    # hf_transfer is a faster Rust-backed multi-stream downloader. In hub 1.x
+    # it's no longer exposed as an extra, so depend on it directly. Activate
+    # at runtime with HF_HUB_ENABLE_HF_TRANSFER=1.
+    "hf-transfer>=0.1.9",
+]

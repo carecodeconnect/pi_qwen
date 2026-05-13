@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Model-agnostic tool-call smoke test.
+#
+# Sends a chat completion with a single `get_weather` tool and a prompt that
+# should trigger it, then asserts the response contains a structured
+# `tool_calls` block — i.e. llama-server parsed the model's output into the
+# OpenAI-format `tool_calls` field, not raw text. This is the same check pi
+# performs internally; if this passes, pi will see real tool calls.
+
+HOST="${HOST:-127.0.0.1}"
+PORT="${PORT:-8080}"
+ALIAS="${ALIAS:-qwen3-coder-30b-a3b}"
+PROMPT="${1:-What is the weather in Paris?}"
+
+response=$(curl -fsS "http://${HOST}:${PORT}/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --arg m "$ALIAS" --arg p "$PROMPT" '{
+    model: $m,
+    messages: [{role: "user", content: $p}],
+    tools: [{
+      type: "function",
+      function: {
+        name: "get_weather",
+        description: "Get current weather for a given city.",
+        parameters: {
+          type: "object",
+          properties: {city: {type: "string", description: "City name"}},
+          required: ["city"]
+        }
+      }
+    }],
+    tool_choice: "auto"
+  }')")
+
+tool_calls=$(jq -c '.choices[0].message.tool_calls // empty' <<<"$response")
+content=$(jq -r '.choices[0].message.content // ""' <<<"$response")
+
+echo "--- model: $ALIAS"
+if [[ -n "$tool_calls" && "$tool_calls" != "null" ]]; then
+  echo "PASS: structured tool_calls returned"
+  jq '.choices[0].message.tool_calls' <<<"$response"
+  exit 0
+fi
+
+echo "FAIL: no tool_calls field — model returned text instead."
+echo "Content was:"
+echo "$content" | head -20
+echo ""
+echo "Hint: ensure llama-server was started with --jinja and that the embedded"
+echo "or override chat template matches what pi expects. See README → Tool calling."
+exit 1

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# gpt-oss-20b (OpenAI, MXFP4 native release via ggml-org).
+# Tool-call format is built into the GGUF's chat template — no override needed,
+# just --jinja. Sampling defaults track OpenAI's reasoning-model recipe.
+
+MODEL="${MODEL:-$HOME/models/gpt-oss-20b/gpt-oss-20b-mxfp4.gguf}"
+HOST="${HOST:-127.0.0.1}"
+PORT="${PORT:-8080}"
+CTX="${CTX:-131072}"
+ALIAS="${ALIAS:-gpt-oss-20b}"
+
+if [[ ! -f "$MODEL" ]]; then
+  echo "error: model not found at $MODEL" >&2
+  echo "set MODEL=/path/to/file.gguf to override, or download with:" >&2
+  echo "  HF_HUB_ENABLE_HF_TRANSFER=1 hf download ggml-org/gpt-oss-20b-GGUF \\" >&2
+  echo "    gpt-oss-20b-mxfp4.gguf --local-dir ~/models/gpt-oss-20b" >&2
+  exit 1
+fi
+
+exec llama-server \
+  -m "$MODEL" \
+  --host "$HOST" --port "$PORT" \
+  -ngl 99 -c "$CTX" -fa on --jinja \
+  --temp 1.0 --top-p 1.0 --top-k 0 \
+  -a "$ALIAS"
