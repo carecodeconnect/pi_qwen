@@ -1,7 +1,7 @@
 [project]
-name = "pi-qwen"
+name = "pi-sandbox"
 version = "0.1.0"
-description = "Tooling for running Qwen3-Coder / gpt-oss / Devstral locally with pi"
+description = "Sandbox for running pi locally against different models and inference engines on Apple Silicon"
 requires-python = ">=3.12"
 dependencies = [
     # `hf` CLI lives in huggingface_hub. We pin >=1.14 because 1.x ships

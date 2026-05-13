@@ -1,16 +1,17 @@
-# pi_qwen
+# pi_sandbox
 
-Run [pi](https://pi.dev) — a minimal terminal coding agent — against a **local** [Qwen3-Coder-30B-A3B-Instruct](https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct) model served by [llama.cpp](https://github.com/ggml-org/llama.cpp), all on Apple Silicon.
+A sandbox for running [pi](https://pi.dev) — a minimal terminal coding agent — against **local** models on Apple Silicon. Swap models, swap inference engines, A/B them on your own hardware. No API keys. No cloud round-trips. All inference on your machine.
 
-No API keys. No cloud round-trips. All inference on your machine.
+The documented default is [Qwen3-Coder-30B-A3B-Instruct](https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct) via [llama.cpp](https://github.com/ggml-org/llama.cpp), with wired-up alternates for [gpt-oss-20b](https://huggingface.co/openai/gpt-oss-20b) and [Devstral-Small-2507](https://huggingface.co/mistralai/Devstral-Small-2507). The [model comparison](#model-comparison) section explains the trade-offs.
 
 ![pi + Qwen3-Coder demo](demo/pi-qwen.gif)
 
-## Why this combo
+## Why this stack
 
-- **Qwen3-Coder-30B-A3B-Instruct** is a Mixture-of-Experts coding model: 30B total parameters, but only ~3B are active per token. That makes it surprisingly fast on consumer Apple Silicon while keeping the quality of a much larger model, and the coder-tuned weights track function-level and repo-level tasks better than the base Qwen3-30B-A3B.
-- **llama.cpp** has the most mature Metal backend and ships precompiled via Homebrew — no Xcode required.
-- **pi** is an OpenAI-API-compatible coding agent, so it talks to llama.cpp's HTTP server like any other provider.
+- **Local models on Apple Silicon are practical now.** A modern MoE in Q5 quant (~12–20 GB) runs at 50–60 tok/s decode on an M1 Max with no cloud round-trip. Coding-agent latency is workable; cost is electricity.
+- **pi is an OpenAI-API-compatible coding agent**, so it talks to a local inference server (llama.cpp, mistral.rs, vLLM, …) the same way it talks to any cloud provider. Drop-in by design.
+- **llama.cpp** has the most mature Metal backend and ships precompiled via Homebrew — no Xcode required. The repo also has scaffolding to swap in [mistral.rs](#alternative-mistralrs-rust) as a Rust-native alternative.
+- **Sandbox by intent.** The scripts and configs make it cheap to try a new model: download a GGUF, drop in a serve wrapper, add a `models.json` entry, run `tool-call-test`. The [Devstral comparison](#model-comparison) is what that workflow looks like in practice.
 
 ## Tested on
 
@@ -53,7 +54,7 @@ The only Python this repo needs is the `hf` CLI (from `huggingface_hub`) and `hf
 ```bash
 # One-time setup
 curl -LsSf https://astral.sh/uv/install.sh | sh    # install uv if you don't have it
-cd ~/projects/pi_qwen
+cd ~/projects/pi_sandbox
 uv sync                                             # creates .venv/, installs deps from lockfile
 
 # Run hf commands inside the project venv
@@ -63,7 +64,7 @@ HF_HUB_ENABLE_HF_TRANSFER=1 uv run hf download <repo> <file> --local-dir <dest>
 
 If you'd rather have `hf` on PATH without prefixing `uv run`, two options:
 - `uv tool install huggingface_hub` — puts `hf` in `~/.local/bin` via uv's tool venv.
-- Or activate the project venv: `source ~/projects/pi_qwen/.venv/bin/activate`.
+- Or activate the project venv: `source ~/projects/pi_sandbox/.venv/bin/activate`.
 
 ## Hugging Face authentication
 
@@ -96,11 +97,11 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 4. Sync this repo's Python deps — gets you `hf` (huggingface_hub CLI) and
 #    hf_transfer (multi-stream downloads), pinned and reproducible
-cd ~/projects/pi_qwen && uv sync
+cd ~/projects/pi_sandbox && uv sync
 
 # 5. Download the model (~21 GB). `uv run` invokes hf from the project venv
 mkdir -p ~/models/qwen3-coder-30b-a3b && cd ~/models/qwen3-coder-30b-a3b
-HF_HUB_ENABLE_HF_TRANSFER=1 uv run --project ~/projects/pi_qwen \
+HF_HUB_ENABLE_HF_TRANSFER=1 uv run --project ~/projects/pi_sandbox \
   hf download unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF \
   Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf --local-dir .
 
@@ -222,7 +223,7 @@ Serves OpenAI's [`gpt-oss-20b`](https://huggingface.co/openai/gpt-oss-20b) — a
 ```bash
 # Install once
 mkdir -p ~/models/gpt-oss-20b
-HF_HUB_ENABLE_HF_TRANSFER=1 uv run --project ~/projects/pi_qwen hf download \
+HF_HUB_ENABLE_HF_TRANSFER=1 uv run --project ~/projects/pi_sandbox hf download \
   ggml-org/gpt-oss-20b-GGUF gpt-oss-20b-mxfp4.gguf \
   --local-dir ~/models/gpt-oss-20b
 cp scripts/gptoss-serve ~/bin/ && chmod +x ~/bin/gptoss-serve
@@ -244,7 +245,7 @@ Serves Mistral × All Hands AI's [`Devstral-Small-2507`](https://huggingface.co/
 ```bash
 # Install once
 mkdir -p ~/models/devstral-small-2507
-HF_HUB_ENABLE_HF_TRANSFER=1 uv run --project ~/projects/pi_qwen hf download \
+HF_HUB_ENABLE_HF_TRANSFER=1 uv run --project ~/projects/pi_sandbox hf download \
   unsloth/Devstral-Small-2507-GGUF Devstral-Small-2507-UD-Q5_K_XL.gguf \
   --local-dir ~/models/devstral-small-2507
 cp scripts/devstral-serve ~/bin/ && chmod +x ~/bin/devstral-serve
@@ -535,7 +536,7 @@ and embed in the README with `<video src="demo/pi-qwen.mp4" controls></video>`. 
 ## Layout of this repo
 
 ```
-pi_qwen/
+pi_sandbox/
 ├── README.md            # this file
 ├── LICENSE              # MIT
 ├── scripts/
