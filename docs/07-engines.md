@@ -83,6 +83,26 @@ Wired-in pi config for the qwen3-1.7b test:
 
 After adding that to `~/.pi/agent/models.json`, `pi --list-models` shows the new provider and `pi --model qwen3-1.7b` drops into a session against higgs.
 
+### Apples-to-apples benchmark vs llama.cpp (Qwen3-1.7B)
+
+Same model architecture, same hardware, similar quantization. Both engines served `Qwen/Qwen3-1.7B` — llama.cpp loaded the `unsloth/Qwen3-1.7B-GGUF` Q5_K_M variant; higgs loaded the `mlx-community/Qwen3-1.7B-4bit` MLX variant. Bench tool: [`bench/engine-compare.py`](../bench/engine-compare.py) (uv inline-script, hits `/v1/chat/completions` with streaming, measures TTFT and decode tok/s).
+
+Prompt: `/no_think Write a Python function that reverses a string. Then explain what it does in one paragraph.` (the `/no_think` prefix disables Qwen3's hybrid thinking mode so the comparison measures content-token decode, not chain-of-thought).
+
+5 runs, max_tokens=256:
+
+| Engine | TTFT | Decode | Tokens generated (avg) |
+|---|---|---|---|
+| llama.cpp (Q5_K_M GGUF, llama-server b9100) | 83 ± 32 ms | 100.4 ± 1.6 tok/s | 108 |
+| higgs (4bit MLX, higgs 1.2.0) | 104 ± 12 ms | **162.8 ± 0.4 tok/s** | 90 |
+
+**higgs is ~62% faster decode** on Qwen3-1.7B at this hardware/quant pairing. TTFT is slightly higher on higgs (a hair over 100 ms vs llama.cpp's ~83 ms) — not relevant for steady-state agentic work where decode dominates.
+
+Caveats:
+- MLX's 4-bit is more aggressive quantization than GGUF Q5_K_M. The decode-speed win is real; the quality gap (if any) isn't measured here. Run real tasks through both before drawing conclusions about utility, not just speed.
+- This is a 1.7B model. The MLX vs llama.cpp gap typically narrows on bigger models where unified-memory bandwidth becomes the bottleneck rather than compute. The 30B comparison is the more important one for daily-use models — pending download of `mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit`.
+- Qwen3-1.7B is a hybrid thinking model. Without the `/no_think` prefix, llama.cpp burns most of its decode budget on `<think>...</think>` tokens that the streamed `content` deltas never see — measured at ~6 content tokens per 256 max_tokens. higgs/MLX appears not to enable thinking mode by default for this MLX-community quantization. Same model, different default behavior — worth knowing if your benchmark numbers diverge unexpectedly.
+
 Underneath higgs, the binding layer is **[oxideai/mlx-rs](https://github.com/oxideai/mlx-rs)** (unofficial Rust bindings to MLX's C++ framework). Relevant if you want to write your own inference server in Rust against MLX — but `mlx-rs` requires building from source with CLT, which is still the no-Apple-ID path but more setup than `brew install higgs`.
 
 **Practical recommendation:** if your goal is "try a Rust inference engine on this hardware with no Xcode friction," start with `higgs`. It's the cleanest match. If higgs's tool-calling turns out to be unreliable or it's missing your model family, fall back to vllm-mlx (next section) — different language (Python) but more mature MLX integration.
