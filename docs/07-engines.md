@@ -30,9 +30,53 @@ Neither is the default path yet — each is here as a candidate to benchmark aga
 
 Both build with `cargo install` and the same Xcode/Metal requirement as mistral.rs. To wire either into pi, point a new entry in `~/.pi/agent/models.json` at the engine's port and use whatever id it advertises at `/v1/models`.
 
-## Adjacent: MLX (not Rust, but Apple-native)
+## MLX (not Rust, but the no-Xcode path)
 
-- **[vllm-mlx](https://github.com/waybarrios/vllm-mlx)** — MLX backend with OpenAI + Anthropic-compatible server, baked-in MCP tool calling, reports 400+ tok/s on M-series for some models. Not Rust, but if the real goal is "swap llama.cpp for something faster on this hardware," MLX is reported 10–30% faster than llama.cpp Metal on 70B+ models. Worth a comparison run alongside the Rust engines.
+- **[vllm-mlx](https://github.com/waybarrios/vllm-mlx)** — MLX backend with an OpenAI + Anthropic-compatible HTTP server, baked-in MCP tool calling (12 parsers including OpenAI, Anthropic, Gemini, Qwen, DeepSeek, Gemma), continuous batching, and vision/audio support. Reports 400+ tok/s on M-series for small models and 10–30% faster than llama.cpp Metal on 70B+ models.
+
+  **Why this matters here:** MLX is Apple's own ML framework, distributed as pre-built Python wheels with the Metal shaders already compiled. **No Xcode and no Apple ID required to install.** That makes vllm-mlx the only practical alternate-engine path on this hardware if mistral.rs / Crane / candle-vllm are blocked by the Xcode requirement.
+
+  Install (uses `uv` per this repo's convention — see [[feedback-use-uv-for-python]] memory, and `pyproject.toml` / `uv.lock`):
+
+  ```bash
+  # Requires macOS on Apple Silicon (M1+) and Python 3.10+
+  git clone https://github.com/waybarrios/vllm-mlx.git ~/src/vllm-mlx
+  cd ~/src/vllm-mlx
+  uv pip install -e .
+  ```
+
+  Optional extras (only if you need them):
+
+  ```bash
+  uv pip install -e ".[vision]"   # vision-language models
+  uv pip install mlx-audio         # STT/TTS
+  uv pip install mlx-embeddings    # embedding models
+  ```
+
+  Verify:
+
+  ```bash
+  vllm-mlx --help
+  vllm-mlx-bench --model mlx-community/Llama-3.2-1B-Instruct-4bit --prompts 1
+  ```
+
+  Launch the OpenAI-compatible server (use **port 8001** to avoid colliding with llama-server on 8080):
+
+  ```bash
+  # Direct from Hugging Face
+  vllm-mlx serve mlx-community/Qwen3-8B-4bit --port 8001 --continuous-batching
+
+  # Or from local disk after acquiring
+  vllm-mlx model acquire mlx-community/Llama-3.2-3B-Instruct-4bit --target-dir ~/models/llama-3b-4bit
+  vllm-mlx serve ~/models/llama-3b-4bit --port 8001 --continuous-batching
+  ```
+
+  Wire into pi: add a provider entry in `~/.pi/agent/models.json` pointing at `http://127.0.0.1:8001/v1` with the model id vllm-mlx advertises at `/v1/models`. Then `tool-call-test` (with `ALIAS=<your-alias> BASE_URL=http://127.0.0.1:8001/v1`) verifies structured tool calls survive the engine swap — same gate as for the llama.cpp models.
+
+  **Caveats:**
+  - MLX uses its own model format, not GGUF. The GGUFs you already downloaded for llama.cpp won't load — you'll need MLX-quantized versions from [mlx-community](https://huggingface.co/mlx-community). Disk-doubling cost.
+  - The upstream README references MCP tool-calling but doesn't document the verification flow; rely on `tool-call-test` as the practical gate.
+  - Comparison-vs-llama.cpp is the headline value, but the MLX format conversion means it's not a perfectly clean A/B (different quantization).
 
 ## Comparison plan
 
