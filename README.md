@@ -76,6 +76,7 @@ Exit pi with `/exit` or Ctrl-D. The server keeps running across pi sessions; sto
 - **[07 — Alternative engines](docs/07-engines.md)** — mistral.rs (primary alternate), candle-vllm, Crane, vllm-mlx.
 - **[08 — Recording the demo](docs/08-demo.md)** — `vhs` script for the README GIF.
 - **[09 — Skills](docs/09-skills.md)** — what a skill is, where pi looks for them, adding project-local and global skills, reusing Claude Code / Codex skills.
+- **[10 — Extensions](docs/10-extensions.md)** — TypeScript extensions, install patterns, what's wired into this repo (`pi-web-access` + the `pi-hooks` bundle), writing your own, skill vs. extension recap.
 
 ## Layout of this repo
 
@@ -92,7 +93,8 @@ pi_sandbox/
 │   ├── 06-troubleshooting.md
 │   ├── 07-engines.md
 │   ├── 08-demo.md
-│   └── 09-skills.md
+│   ├── 09-skills.md
+│   └── 10-extensions.md
 ├── install/            # one-shot install scripts (idempotent)
 │   ├── base.sh                    # copies scripts + models.json into place
 │   ├── qwen3-coder-30b.sh         # default coder model, ~21 GB
