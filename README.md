@@ -61,7 +61,7 @@ Documenting what didn't work so the same paths don't get retried. Both kept this
 
 Candidates queued for testing on this same 64 GB M1 Max. All MoE (dense ≥24 B is ruled out by the Devstral result above) and known to have working structured tool calling in current llama.cpp.
 
-- **[Qwen3-Coder-Next-80B-A3B-Instruct](https://huggingface.co/unsloth/Qwen3-Coder-Next-GGUF)** (MoE, **3 B active** of 80 B, UD-Q3_K_XL, ~35–40 GB) — **best architectural fit.** Same family as the current Qwen3-Coder-30B default, just scaled up. 3 B active means Apple Silicon's unified-memory bandwidth stays unsaturated; 256 K native context (extendable to 1 M via YaRN). Q4_K_M (~48 GB) is tight on 64 GB once KV cache is added; UD-Q3_K_XL leaves real headroom. Upstream benchmarks: [Qwen3-Coder blog](https://qwenlm.github.io/blog/qwen3-coder/).
+- **[Qwen3-Coder-Next-80B-A3B-Instruct](https://huggingface.co/unsloth/Qwen3-Coder-Next-GGUF)** (MoE, **3 B active** of 80 B, **Q3_K_M, 38 GB**) — **in progress.** Scaled-up sibling of the Qwen3-Coder-30B default; same 3 B active params, same coder-tuning, same template trick. Wired up via [`qwennext-serve`](#qwennext-serve-alternate-model). Quant picked to land under the default 44 GB Metal cap so no `sysctl` prereq is needed (cleaner than GLM-Air's path). Note: Unsloth doesn't ship a `UD-Q3_K_XL` for this model — vanilla `Q3_K_M` was the closest in-budget option. Upstream benchmarks: [Qwen3-Coder blog](https://qwenlm.github.io/blog/qwen3-coder/).
 - **[gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b)** (MoE, ~5.1 B active of 117 B, MXFP4 native, ~63 GB) — **cleanest scale-up of the gpt-oss-20b favorite.** Same chat template, same `--jinja`-only wiring, same sampler recipe. The catch: 63 GB weights on a 64 GB Mac leave ~1 GB headroom — forces `CTX` to 16–32 K and minimal background apps. Similar tightness to vanilla `Q3_K_M` GLM, which is why GLM dropped to UD-Q3_K_XL. Upstream benchmarks: [OpenAI gpt-oss announcement](https://openai.com/index/introducing-gpt-oss/).
 - **[Llama 4 Scout](https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E-Instruct)** (MoE, **17 B active** of 109 B, UD-Q3/Q4, ~50–60 GB) — **expected to underperform Qwen-Coder-Next.** 17 B active is much higher than ideal for Apple Silicon's bandwidth ceiling; decode will be slower than the 3 B-active alternatives despite a similar total-parameter count. Not agent-tuned the way GLM-Air is. Worth testing only to confirm the bandwidth-vs-active-params hypothesis empirically.
 
@@ -270,6 +270,32 @@ pi --model local-gpt-oss-20b
 Defaults: `CTX=131072`, sampler temp 1.0 / top-p 1.0 (gpt-oss is reasoning-tuned and recommends near-deterministic sampling controlled by `reasoning_effort` in the system prompt rather than temperature).
 
 The `local-` prefix on the model id avoids a collision with pi's built-in `gpt-oss-20b` entries (which route to OpenAI / Fireworks / Cloudflare / Bedrock). See [Troubleshooting → pi routes to a cloud provider](#pi-routes-to-a-cloud-provider-instead-of-localhost).
+
+### `qwennext-serve` (alternate model)
+Serves [`Qwen3-Coder-Next-80B-A3B-Instruct`](https://huggingface.co/Qwen/Qwen3-Next-80B-A3B-Instruct) — the scaled-up sibling of the Qwen3-Coder-30B-A3B default. 80 B total, **3 B active** (same as the 30B variant), 256 K native context. Picked `Q3_K_M` (~38 GB) to hit the "real headroom" target — fits under the default 44 GB Metal cap on a 64 GB Mac, so no `sysctl iogpu.wired_limit_mb` bump needed (unlike GLM-4.5-Air).
+
+```bash
+# Install once (assumes `hf` on PATH — see Python tooling)
+mkdir -p ~/models/qwen3-coder-next
+HF_HUB_ENABLE_HF_TRANSFER=1 hf download \
+  unsloth/Qwen3-Coder-Next-GGUF Qwen3-Coder-Next-Q3_K_M.gguf \
+  --local-dir ~/models/qwen3-coder-next
+cp scripts/qwennext-serve ~/bin/ && chmod +x ~/bin/qwennext-serve
+
+# Fetch the upstream chat template — same tool-call bug fix as Qwen3-Coder-30B
+DEST_DIR=~/models/qwen3-coder-next/templates \
+  DEST=$DEST_DIR/qwen3-next-official.jinja \
+  TOKCONF_URL=https://huggingface.co/Qwen/Qwen3-Next-80B-A3B-Instruct/resolve/main/tokenizer_config.json \
+  fetch-template
+
+# Serve (stop other llama-server processes first)
+qwennext-serve
+
+# In pi
+pi --model local-qwen3-coder-next
+```
+
+Defaults: `CTX=131072`, sampler temp 0.6 / top-p 0.95 / top-k 20 (Qwen's official recipe — same as Qwen3-Coder-30B), `--cache-type-k q8_0 --cache-type-v q8_0` baked in to keep KV cache compact at the larger size. Uses `--chat-template-file` pointed at the fetched upstream template (the Unsloth GGUF inherits Qwen3-Coder-30B's tool-call format bug — same fix applies).
 
 ### `glmair-serve` (alternate model)
 Serves Z.ai's [`GLM-4.5-Air`](https://huggingface.co/zai-org/GLM-4.5-Air) ([GitHub](https://github.com/zai-org/GLM-4.5)) — a 106 B MoE (~12 B active) from the GLM-4.5 "ARC" family (Agentic, Reasoning, Coding), purpose-tuned for tool-using agents. Uses Unsloth's dynamic Q3 quant (UD-Q3_K_XL, ~55 GB across two shards) — the largest variant that fits on a 64 GB Apple Silicon Mac with KV-cache headroom.
@@ -632,6 +658,7 @@ pi_sandbox/
 ├── LICENSE              # MIT
 ├── scripts/
 │   ├── qwen-serve       # start llama-server for Qwen3-Coder-30B-A3B
+│   ├── qwennext-serve   # alternate: Qwen3-Coder-Next-80B-A3B (3B active)
 │   ├── gptoss-serve     # alternate: OpenAI gpt-oss-20b
 │   ├── glmair-serve     # alternate: Z.ai GLM-4.5-Air (106B MoE)
 │   ├── serve-stop       # kill whatever llama-server is on port 8080
