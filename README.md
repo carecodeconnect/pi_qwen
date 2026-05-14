@@ -125,6 +125,14 @@ pi_sandbox/
 - [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) for the inference engine
 - [pi](https://pi.dev) for the agent
 
+## Further reading
+
+Three upstream catalogs that source the skills and extensions referenced in [docs/09-skills.md](docs/09-skills.md):
+
+- [anthropics/skills](https://github.com/anthropics/skills) — Anthropic's official skills (docx, pdf, mcp-builder, skill-creator, frontend-design, …).
+- [badlogic/pi-skills](https://github.com/badlogic/pi-skills) — community pi skills (brave-search, browser-tools, Google APIs, transcribe, vscode, youtube-transcript).
+- [qualisero/awesome-pi-agent](https://github.com/qualisero/awesome-pi-agent) — meta-catalog of pi extensions, skills, tools, and prompt templates across the ecosystem.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

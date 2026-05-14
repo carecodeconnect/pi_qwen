@@ -139,12 +139,13 @@ The model `read`s `SKILL.md`, sees the bash commands, and emits `bash` tool call
 - **Skill** — workflows expressible as instructions + helper scripts the model invokes via `bash`. Faster to write, no TypeScript build, no Node deps to manage. Best for repeatable procedures (release checklist, codebase-survey routines, lint-fix loops).
 - **Extension** — when you need to register a *new tool type* with structured arguments and typed return shapes (like `pi-web-access` adding `web_search`). Heavier — TypeScript module, npm install, costs ~50–150 prompt tokens per registered tool ([performance note](./04-tool-calling.md#web-search-pi-web-access)).
 
-## Skill repositories
+## Skill and extension repositories
 
-Two upstream collections worth pointing at via `settings.json`:
+Three upstream catalogs to draw from:
 
-- [anthropics/skills](https://github.com/anthropics/skills) — document processing (docx, pdf, pptx, xlsx), web development.
-- [badlogic/pi-skills](https://github.com/badlogic/pi-skills) — web search, browser automation, Google APIs, transcription.
+- [anthropics/skills](https://github.com/anthropics/skills) — Anthropic's official skills (algorithmic-art, brand-guidelines, canvas-design, claude-api, doc-coauthoring, docx, frontend-design, internal-comms, mcp-builder, pdf, pptx, skill-creator, slack-gif-creator, theme-factory, web-artifacts-builder, webapp-testing, xlsx).
+- [badlogic/pi-skills](https://github.com/badlogic/pi-skills) — community pi skills (brave-search, browser-tools, gccli/gdcli/gmcli for Google APIs, transcribe, vscode, youtube-transcript).
+- [qualisero/awesome-pi-agent](https://github.com/qualisero/awesome-pi-agent) — meta-catalog of pi extensions, skills, tools, and prompt templates across the ecosystem. Start here for discovery.
 
 ## Security note
 
