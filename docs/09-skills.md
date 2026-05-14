@@ -54,6 +54,7 @@ Frontmatter rules ([full spec](https://agentskills.io/specification#frontmatter-
 
 - `name` (required) — 1–64 chars, lowercase `a-z`, digits, hyphens. Must match the parent directory name. No leading/trailing or consecutive hyphens.
 - `description` (required) — max 1024 chars. Skills with no description are silently dropped.
+- **YAML gotcha:** don't put unquoted colons inside `description` or `name` values — pi's YAML parser treats an embedded `:` as a nested mapping and rejects the skill with `Nested mappings are not allowed in compact mappings`. Use an em dash, parentheses, or wrap the whole value in double quotes.
 - Optional: `license`, `compatibility`, `metadata`, `allowed-tools`, `disable-model-invocation` (hides from system prompt; only invokable via `/skill:name`).
 
 Relaunch pi — the skill shows up under `[Skills]` in the startup banner. Force-load it with `/skill:my-skill` (with optional args: `/skill:my-skill some args` appends `User: some args` to the loaded content).
