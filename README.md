@@ -91,6 +91,13 @@ pi_sandbox/
 │   ├── 06-troubleshooting.md
 │   ├── 07-engines.md
 │   └── 08-demo.md
+├── install/            # one-shot install scripts (idempotent)
+│   ├── base.sh                    # copies scripts + models.json into place
+│   ├── qwen3-coder-30b.sh         # default coder model, ~21 GB
+│   ├── qwen3-coder-next-80b.sh    # long-context coder, ~38 GB
+│   ├── gpt-oss-20b.sh             # fastest, generalist, ~12 GB
+│   ├── glm-4.5-air.sh             # largest, agent-tuned, ~55 GB
+│   └── all-models.sh              # base + all four models in sequence
 ├── scripts/
 │   ├── qwen-serve      # start llama-server for Qwen3-Coder-30B-A3B
 │   ├── qwennext-serve  # alternate: Qwen3-Coder-Next-80B-A3B

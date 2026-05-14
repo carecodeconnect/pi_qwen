@@ -11,49 +11,61 @@ Get pi running against a local Qwen3-Coder model on Apple Silicon in ~10 minutes
 
 ## End-to-end install
 
+The fastest path is the install scripts in [`install/`](../install/) — each is idempotent (skips downloads/copies if already in place):
+
 ```bash
-# 1. Install llama.cpp (Metal-enabled, precompiled)
-brew install llama.cpp
+# 1. System prerequisites
+brew install llama.cpp                                       # Metal-enabled
+curl -fsSL https://pi.dev/install.sh | sh                    # pi
+curl -LsSf https://astral.sh/uv/install.sh | sh              # uv
 
-# 2. Install pi
-curl -fsSL https://pi.dev/install.sh | sh
+# 2. From inside the cloned repo
+uv sync                                                       # pin hf + hf_transfer
+./install/base.sh                                             # ~/bin scripts + ~/.pi/agent/models.json
+./install/qwen3-coder-30b.sh                                  # download + wire up the default model
 
-# 3. Install uv (Python project/dependency manager)
-curl -LsSf https://astral.sh/uv/install.sh | sh
+# 3. Make sure ~/bin is on PATH (one-time):
+# echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 
-# 4. From inside the cloned repo, sync Python deps — pins `hf` + `hf_transfer`
-uv sync
-source .venv/bin/activate
+# 4. Smoke test
+qwen-serve                            # terminal 1 — leave it running
+qwen-test "reply with just: hello"    # terminal 2 — sanity check
+tool-call-test                        # terminal 2 — structured tool_calls
 
-# 5. Download the model (~21 GB)
+# 5. Run pi against the local model
+cd /path/to/some/project
+pi --model qwen3-coder-30b-a3b
+```
+
+For other models, swap step 2's last line for `install/qwen3-coder-next-80b.sh`, `install/gpt-oss-20b.sh`, or `install/glm-4.5-air.sh`. To install all four, use `install/all-models.sh` (~127 GB total).
+
+### Manual install (no install scripts)
+
+If you'd rather see each step explicitly, the install scripts are short bash — read them as documentation. The equivalent manual sequence for Qwen3-Coder-30B:
+
+```bash
+# Download the model (~21 GB)
 mkdir -p ~/models/qwen3-coder-30b-a3b && cd ~/models/qwen3-coder-30b-a3b
 HF_HUB_ENABLE_HF_TRANSFER=1 hf download \
   unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF \
   Qwen3-Coder-30B-A3B-Instruct-Q5_K_M.gguf --local-dir .
 
-# 6. Install the helper scripts to ~/bin
+# Copy helper scripts to ~/bin
 mkdir -p ~/bin
 cp scripts/qwen-serve scripts/qwen-test scripts/fetch-template ~/bin/
 chmod +x ~/bin/qwen-serve ~/bin/qwen-test ~/bin/fetch-template
-# Make sure ~/bin is on PATH:
-# echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 
-# 7. Install the pi provider config
+# Install the pi provider config
 mkdir -p ~/.pi/agent
 cp config/models.json ~/.pi/agent/models.json
 
-# 8. Fetch Qwen's official chat template (needed for tool calling — see docs/04-tool-calling.md)
+# Fetch Qwen's official chat template (fixes tool-call format bug — see docs/04-tool-calling.md)
 fetch-template
 
-# 9. Start the server (leave it running)
-qwen-serve
-
-# 10. From another terminal, smoke-test
-qwen-test "reply with just: hello"
-
-# 11. Run pi against the local model
-cd /path/to/some/project
-pi --model qwen3-coder-30b-a3b
+# Start + test
+qwen-serve                              # terminal 1
+qwen-test "reply with just: hello"      # terminal 2
+pi --model qwen3-coder-30b-a3b          # terminal 2
 ```
 
 ## Daily use

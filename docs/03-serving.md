@@ -4,6 +4,8 @@ The helper scripts in `scripts/`. Each `*-serve` script wraps `llama-server` wit
 
 All serve scripts honor `MODEL=`, `HOST=`, `PORT=`, `CTX=`, and `ALIAS=` env-var overrides.
 
+For the install side (download GGUF + copy serve script + fetch template), use the [`install/`](../install/) scripts — they're idempotent and resumable. The sections below show the manual equivalents for reference.
+
 ## `qwen-serve` (default — Qwen3-Coder-30B-A3B)
 
 Starts `llama-server` with the flag set this repo has settled on.
