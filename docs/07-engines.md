@@ -53,7 +53,35 @@ higgs serve --port 8002
 # Then send requests to http://127.0.0.1:8002/v1/chat/completions
 ```
 
-Wire into pi the same way as any other engine: add a provider entry in `~/.pi/agent/models.json` and gate with `tool-call-test`. **Caveat:** the higgs README doesn't explicitly document tool-call format support — verify with `tool-call-test` before trusting the integration. If tool calls fail, that's a known risk with newer engines and may need waiting on upstream.
+Wire into pi the same way as any other engine: add a provider entry in `~/.pi/agent/models.json` and gate with `tool-call-test`.
+
+**Empirical results (2026-05-14, this sandbox):**
+
+| MLX model | tool-call-test | Notes |
+|---|---|---|
+| `mlx-community/Qwen3-1.7B-4bit` | ✓ PASS | Structured `tool_calls` returned cleanly for `get_weather`. Verified end-to-end with this exact command: `PORT=8002 ALIAS=qwen3-1.7b tool-call-test`. |
+| `mlx-community/Llama-3.2-1B-Instruct-4bit` | ✗ FAIL | Jinja template error: `too many arguments (in chat:61)`. Not a higgs bug — Meta's Llama-3.2 1B doesn't ship a tool-call-aware chat template (tool support starts at 3B+). Same failure shape as the DeepSeek-Coder-V2-Lite rejection in [`docs/02-models.md`](./02-models.md#tested-and-rejected). |
+
+Rule of thumb: on higgs, **pick MLX models with documented tool-call training** (Qwen3 family, Qwen2.5-Coder, Llama-3.2-3B+, GLM-4.5-Air, gpt-oss). Skip 1B-class instruct models — they predate the structured-tool-call norm at that size.
+
+Wired-in pi config for the qwen3-1.7b test:
+
+```json
+"local-higgs": {
+  "baseUrl": "http://127.0.0.1:8002/v1",
+  "api": "openai-completions",
+  "apiKey": "not-needed",
+  "models": [{
+    "id": "qwen3-1.7b",
+    "name": "Qwen3-1.7B (local, MLX via higgs)",
+    "reasoning": false,
+    "contextWindow": 32768,
+    "maxTokens": 4096
+  }]
+}
+```
+
+After adding that to `~/.pi/agent/models.json`, `pi --list-models` shows the new provider and `pi --model qwen3-1.7b` drops into a session against higgs.
 
 Underneath higgs, the binding layer is **[oxideai/mlx-rs](https://github.com/oxideai/mlx-rs)** (unofficial Rust bindings to MLX's C++ framework). Relevant if you want to write your own inference server in Rust against MLX — but `mlx-rs` requires building from source with CLT, which is still the no-Apple-ID path but more setup than `brew install higgs`.
 
