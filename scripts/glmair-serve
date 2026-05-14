@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# GLM-4.5-Air (Z.ai). 106B MoE, ~12B active. Agent-tuned ARC family
+# (Agentic, Reasoning, Coding). Unsloth's UD-Q3_K_XL dynamic quant is
+# the largest variant that fits on a 64 GB Apple Silicon Mac with
+# headroom for KV cache + OS.
+#
+# Sharded GGUF (~55 GB total in two parts). llama.cpp auto-loads the
+# second shard when pointed at -00001-of-00002.
+#
+# Tool calling: Unsloth's GGUFs embed a corrected chat template that
+# fixes the upstream tool-call format bug — no --chat-template-file
+# override needed, --jinja alone is enough.
+#
+# Sampling: Z.ai's official recipe for GLM-4.5 is temp 0.6 / top-p 0.95
+# (same as Qwen3-Coder).
+#
+# Context: defaults to 32k because UD-Q3_K_XL leaves ~9 GB headroom on
+# a 64 GB Mac. Push to 65536 only with --cache-type-k q8_0 (see README).
+
+MODEL="${MODEL:-$HOME/models/glm-4.5-air/UD-Q3_K_XL/GLM-4.5-Air-UD-Q3_K_XL-00001-of-00002.gguf}"
+HOST="${HOST:-127.0.0.1}"
+PORT="${PORT:-8080}"
+CTX="${CTX:-32768}"
+ALIAS="${ALIAS:-local-glm-4.5-air}"
+
+if [[ ! -f "$MODEL" ]]; then
+  echo "error: model not found at $MODEL" >&2
+  echo "set MODEL=/path/to/file.gguf to override, or download with:" >&2
+  echo "  HF_HUB_ENABLE_HF_TRANSFER=1 hf download unsloth/GLM-4.5-Air-GGUF \\" >&2
+  echo "    --include 'UD-Q3_K_XL/*' --local-dir ~/models/glm-4.5-air" >&2
+  exit 1
+fi
+
+exec llama-server \
+  -m "$MODEL" \
+  --host "$HOST" --port "$PORT" \
+  -ngl 99 -c "$CTX" -fa on --jinja \
+  --cache-type-k q8_0 --cache-type-v q8_0 \
+  --temp 0.6 --top-p 0.95 \
+  -a "$ALIAS"

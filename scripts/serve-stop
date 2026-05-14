@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Stop whatever llama-server is currently holding the port (default 8080).
-# Useful when switching between qwen-serve / gptoss-serve / devstral-serve,
+# Useful when switching between qwen-serve / gptoss-serve / glmair-serve,
 # since only one server can bind the port at a time.
 
 PORT="${PORT:-8080}"

@@ -2,7 +2,7 @@
 
 A sandbox for running [pi](https://pi.dev) — a minimal terminal coding agent — against **local** models on Apple Silicon. Swap models, swap inference engines, A/B them on your own hardware. No API keys. No cloud round-trips. All inference on your machine.
 
-The documented default is [Qwen3-Coder-30B-A3B-Instruct](https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct) via [llama.cpp](https://github.com/ggml-org/llama.cpp), with wired-up alternates for [gpt-oss-20b](https://huggingface.co/openai/gpt-oss-20b) and [Devstral-Small-2507](https://huggingface.co/mistralai/Devstral-Small-2507). The [model comparison](#model-comparison) section explains the trade-offs.
+The documented default is [Qwen3-Coder-30B-A3B-Instruct](https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct) via [llama.cpp](https://github.com/ggml-org/llama.cpp), with wired-up alternates for [gpt-oss-20b](https://huggingface.co/openai/gpt-oss-20b) and [GLM-4.5-Air](https://huggingface.co/zai-org/GLM-4.5-Air). The [model comparison](#model-comparison) section explains the trade-offs and [Tested and rejected](#tested-and-rejected) records what didn't work.
 
 ![pi + Qwen3-Coder demo](demo/pi-qwen.gif)
 
@@ -11,7 +11,7 @@ The documented default is [Qwen3-Coder-30B-A3B-Instruct](https://huggingface.co/
 - **Local models on Apple Silicon are practical now.** A modern MoE in Q5 quant (~12–20 GB) runs at 50–60 tok/s decode on an M1 Max with no cloud round-trip. Coding-agent latency is workable; cost is electricity.
 - **pi is an OpenAI-API-compatible coding agent**, so it talks to a local inference server (llama.cpp, mistral.rs, vLLM, …) the same way it talks to any cloud provider. Drop-in by design.
 - **llama.cpp** has the most mature Metal backend and ships precompiled via Homebrew — no Xcode required. The repo also has scaffolding to swap in [mistral.rs](#alternative-mistralrs-rust) as a Rust-native alternative.
-- **Sandbox by intent.** The scripts and configs make it cheap to try a new model: download a GGUF, drop in a serve wrapper, add a `models.json` entry, run `tool-call-test`. The [Devstral comparison](#model-comparison) is what that workflow looks like in practice.
+- **Sandbox by intent.** The scripts and configs make it cheap to try a new model: download a GGUF, drop in a serve wrapper, add a `models.json` entry, run `tool-call-test`. The [Tested and rejected](#tested-and-rejected) section is what that workflow's failure cases look like in practice.
 
 ## Tested on
 
@@ -22,30 +22,61 @@ The documented default is [Qwen3-Coder-30B-A3B-Instruct](https://huggingface.co/
 
 Measured throughput on this hardware (M1 Max, llama.cpp `b9100`, `-fa 1 -ngl 99 -r 3`):
 
-| test                | Qwen3-Coder-30B-A3B<br>(Q5_K_M, 20 GiB) | gpt-oss-20b<br>(MXFP4, 11 GiB) |
-| ------------------- | --------------------------------------: | -----------------------------: |
-| pp512 (prefill)     |                          593.80 ± 4.38 |                **755.59 ± 0.90** |
-| pp2048              |                          554.40 ± 0.51 |                **741.53 ± 1.33** |
-| pp8192              |                          409.13 ± 7.86 |                **650.61 ± 7.65** |
-| tg128 (decode)      |                           50.76 ± 0.21 |                 **59.67 ± 0.46** |
-| tg512               |                           50.00 ± 0.11 |                 **60.40 ± 0.31** |
-| pp8192+tg128        |                          356.51 ± 2.71 |                **544.15 ± 3.87** |
+| test                | Qwen3-Coder-30B-A3B<br>(Q5_K_M, 20 GiB) | gpt-oss-20b<br>(MXFP4, 11 GiB) | GLM-4.5-Air<br>(UD-Q3_K_XL, 51 GiB) |
+| ------------------- | --------------------------------------: | -----------------------------: | ----------------------------------: |
+| pp512 (prefill)     |                          593.80 ± 4.38 |                **755.59 ± 0.90** |                       160.62 ± 1.25 |
+| pp2048              |                          554.40 ± 0.51 |                **741.53 ± 1.33** |                       150.45 ± 1.76 |
+| pp8192              |                          409.13 ± 7.86 |                **650.61 ± 7.65** |                       116.98 ± 0.47 |
+| tg128 (decode)      |                           50.76 ± 0.21 |                 **59.67 ± 0.46** |                        20.57 ± 0.08 |
+| tg512               |                           50.00 ± 0.11 |                 **60.40 ± 0.31** |                        19.82 ± 0.30 |
+| pp8192+tg128        |                          356.51 ± 2.71 |                **544.15 ± 3.87** |                       104.77 ± 1.50 |
 
-gpt-oss-20b is **~1.2–1.6× faster** across the board; the gap widens at long contexts because gpt-oss has fewer total parameters (21 B vs 30 B) despite both being MoE. See [Benchmarking](#benchmarking) for the raw `llama-bench` output and how to reproduce.
+gpt-oss-20b is **~1.2–1.6× faster than Qwen** across the board; the gap widens at long contexts because gpt-oss has fewer total parameters (21 B vs 30 B) despite both being MoE. GLM-4.5-Air decodes **~2.5× slower than Qwen** and **~3× slower than gpt-oss** — expected given 12 B active params (4× Qwen's) and the model running near the wired-memory ceiling. Prefill is ~3.5–5× slower, large enough to feel in long-context agent turns. See [Benchmarking](#benchmarking) for the raw `llama-bench` output and how to reproduce.
 
 Should work on any Apple Silicon Mac with ≥ 32 GB RAM. Bigger context windows or higher-bit quants need more.
 
 ### Model comparison
 
-Three candidates were tested on the same M1 Max with pi as the agent harness:
+Three candidates work end-to-end with pi on this hardware:
 
-- **Qwen3-Coder-30B-A3B-Instruct** (MoE, ~3 B active of 30 B, Q5_K_M, ~20 GiB) — **current default**. Coder-tuned weights, strong tool-call coherence, balanced speed and quality on real coding tasks.
-- **gpt-oss-20b** (MoE, ~3.6 B active of 21 B, MXFP4, ~11 GiB) — **competitive**. Clean tool calls, ~1.2–1.6× faster than Qwen on the same prompt sweep (see [Tested on](#tested-on)). Generalist-reasoning-tuned rather than coder-specialized; survey and Q&A feel just as good, dense codegen quality has not been fully evaluated.
-- **Devstral-Small-2507** (24 B dense, Unsloth UD-Q5_K_XL, ~17 GiB) — **not recommended.** Two failure modes:
-  - Decode ~5× slower than Qwen (~11 tok/s vs ~51 tok/s) — dense 24 B saturates Apple Silicon's memory bandwidth.
-  - Tool-call coherence broke down: asked to enumerate the repo, Devstral emitted a runaway `find` whose `-name` clauses looped duplicates for hundreds of patterns before truncation.
+- **Qwen3-Coder-30B-A3B-Instruct** (MoE, ~3 B active of 30 B, Q5_K_M, ~20 GiB) — **current default**. Coder-tuned weights, strong tool-call coherence, balanced speed and quality on real coding tasks. Upstream benchmarks: [Qwen3-Coder blog](https://qwenlm.github.io/blog/qwen3-coder/).
+- **gpt-oss-20b** (MoE, ~3.6 B active of 21 B, MXFP4, ~11 GiB) — **competitive**. Clean tool calls, ~1.2–1.6× faster than Qwen on the same prompt sweep (see [Tested on](#tested-on)). Generalist-reasoning-tuned rather than coder-specialized; survey and Q&A feel just as good, dense codegen quality has not been fully evaluated. Upstream benchmarks: [OpenAI gpt-oss announcement](https://openai.com/index/introducing-gpt-oss/).
+- **GLM-4.5-Air** (MoE, ~12 B active of 106 B, Unsloth UD-Q3_K_XL, ~51 GiB) — **marginal but works.** Agent-tuned, clean tool calls, decode ~20 tok/s (~2.5× slower than Qwen — see [Tested on](#tested-on)). Needs a Metal wired-memory cap bump (see [troubleshooting](#kiogpucommandbuffercallbackerroroutofmemory-during-inference)). Upstream benchmarks: [Z.ai GLM-4.5 blog](https://z.ai/blog/glm-4.5).
 
-The `scripts/devstral-serve` wrapper and the `local-devstral-small-2507` entry in `config/models.json` are kept so the comparison stays reproducible — the GGUF just isn't downloaded by default.
+### Tested and rejected
+
+Documenting what didn't work so the same paths don't get retried. Both kept this short subsection but removed from `config/models.json`, the serve scripts, and the disk; the GGUFs are not in the Quickstart path.
+
+- **Devstral-Small-2507** (24 B **dense**, Unsloth UD-Q5_K_XL, ~17 GiB) — **failed: bandwidth + tool-call coherence.**
+  - Decode ~5× slower than Qwen (~11 tok/s vs ~51 tok/s) — dense 24 B saturates Apple Silicon's unified-memory bandwidth.
+  - Asked to enumerate the repo, Devstral emitted a runaway `find` whose `-name` clauses looped duplicates for hundreds of patterns before truncation.
+  - **Lesson:** dense ≥ ~20 B is bandwidth-bound on M1 Max regardless of quant — stick to MoE with low active params.
+- **DeepSeek-Coder-V2-Lite-Instruct** (16 B MoE, **2.4 B active**, Q5_K_M, ~12 GB) — **failed: model not trained for structured tool calls.**
+  - Architecturally a perfect fit (smallest-active-params coder we evaluated); chat works fine.
+  - But the upstream `chat_template` is 459 bytes total and renders only `user`/`assistant`/`system` roles with no `<tool_call>` envelope — the model was never trained to emit structured tool calls. Asked to call `get_weather`, it suggested *external* weather websites instead.
+  - No template-fetch trick recovers this — the *model* doesn't speak tool calling.
+  - **Lesson:** models released before ~mid-2024 (DeepSeek-Coder-V2, CodeLlama, StarCoder-2, Yi-Coder, …) generally predate the structured tool-call norm and are likely to fail the same way. Always run `tool-call-test` before trusting an older model.
+
+### Next model trials
+
+Candidates queued for testing on this same 64 GB M1 Max. All MoE (dense ≥24 B is ruled out by the Devstral result above) and known to have working structured tool calling in current llama.cpp.
+
+- **[Qwen3-Coder-Next-80B-A3B-Instruct](https://huggingface.co/unsloth/Qwen3-Coder-Next-GGUF)** (MoE, **3 B active** of 80 B, UD-Q3_K_XL, ~35–40 GB) — **best architectural fit.** Same family as the current Qwen3-Coder-30B default, just scaled up. 3 B active means Apple Silicon's unified-memory bandwidth stays unsaturated; 256 K native context (extendable to 1 M via YaRN). Q4_K_M (~48 GB) is tight on 64 GB once KV cache is added; UD-Q3_K_XL leaves real headroom. Upstream benchmarks: [Qwen3-Coder blog](https://qwenlm.github.io/blog/qwen3-coder/).
+- **[gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b)** (MoE, ~5.1 B active of 117 B, MXFP4 native, ~63 GB) — **cleanest scale-up of the gpt-oss-20b favorite.** Same chat template, same `--jinja`-only wiring, same sampler recipe. The catch: 63 GB weights on a 64 GB Mac leave ~1 GB headroom — forces `CTX` to 16–32 K and minimal background apps. Similar tightness to vanilla `Q3_K_M` GLM, which is why GLM dropped to UD-Q3_K_XL. Upstream benchmarks: [OpenAI gpt-oss announcement](https://openai.com/index/introducing-gpt-oss/).
+- **[Llama 4 Scout](https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E-Instruct)** (MoE, **17 B active** of 109 B, UD-Q3/Q4, ~50–60 GB) — **expected to underperform Qwen-Coder-Next.** 17 B active is much higher than ideal for Apple Silicon's bandwidth ceiling; decode will be slower than the 3 B-active alternatives despite a similar total-parameter count. Not agent-tuned the way GLM-Air is. Worth testing only to confirm the bandwidth-vs-active-params hypothesis empirically.
+
+Skipped at this hardware tier: DeepSeek-V3/V3.1/V3.2 (~200 GB+ at Q2 — see [DeepSeek note](#a-note-on-deepseek-for-this-hardware) below), Kimi-K2/K2.6 (~350 GB at dynamic 2-bit), Qwen3-Coder-480B (~150 GB at Q3), MiniMax-M1, Mixtral 8x22B (39 B active = same bandwidth death as Devstral). All need a 128 GB+ Mac to be worth the disk space.
+
+### A note on DeepSeek for this hardware
+
+DeepSeek doesn't currently ship a model that's *both* coder-tuned, small enough for a 64 GB Mac, *and* trained for structured tool calls. The matrix as of May 2026:
+
+- **DeepSeek-Coder-V2-Lite** (16 B/2.4 B active) — small enough, but no tool-call training (failed above).
+- **DeepSeek-Coder-V2-Instruct** (236 B/21 B active) — tool calls work in V3+ post-training, but too big at any quant for 64 GB.
+- **DeepSeek-V3 / V3.1 / V3.2-Exp** (671 B/37 B active) — strong tool calling, but ~200–250 GB at dynamic 2-bit; needs a 192 GB+ Mac.
+- **DeepSeek-R1-Distill-Qwen-14B / 32B** — dense distillations into Qwen, would be the only DeepSeek-flavored option that fits, but: (a) dense 32 B is Devstral territory, (b) the distillations target *reasoning* not *coding* and are not trained for tool calls in the same shape pi expects.
+
+Net: there is no DeepSeek model that satisfies all three constraints on a 64 GB Mac today. Qwen3-Coder and GLM-4.5-Air fill the slot DeepSeek would otherwise occupy.
 
 ## Python tooling (uv)
 
@@ -197,13 +228,13 @@ Model-agnostic check that the running server returns structured `tool_calls` (th
 ```bash
 ALIAS=qwen3-coder-30b-a3b   tool-call-test       # against Qwen
 ALIAS=local-gpt-oss-20b           tool-call-test   # against gpt-oss
-ALIAS=local-devstral-small-2507   tool-call-test   # against Devstral
+ALIAS=local-glm-4.5-air           tool-call-test   # against GLM-4.5-Air
 ```
 
 If this fails, pi will not see tool calls from that model either — fix the chat-template wiring before running pi.
 
 ### `serve-stop`
-Kills whatever llama-server is currently bound to port 8080 (override with `PORT=…`). Useful when switching between `qwen-serve` / `gptoss-serve` / `devstral-serve`, since only one server can hold the port at a time.
+Kills whatever llama-server is currently bound to port 8080 (override with `PORT=…`). Useful when switching between `qwen-serve` / `gptoss-serve` / `glmair-serve`, since only one server can hold the port at a time.
 
 ```bash
 serve-stop                       # frees port 8080
@@ -240,27 +271,35 @@ Defaults: `CTX=131072`, sampler temp 1.0 / top-p 1.0 (gpt-oss is reasoning-tuned
 
 The `local-` prefix on the model id avoids a collision with pi's built-in `gpt-oss-20b` entries (which route to OpenAI / Fireworks / Cloudflare / Bedrock). See [Troubleshooting → pi routes to a cloud provider](#pi-routes-to-a-cloud-provider-instead-of-localhost).
 
-### `devstral-serve` (alternate model)
-Serves Mistral × All Hands AI's [`Devstral-Small-2507`](https://huggingface.co/mistralai/Devstral-Small-2507) — a 24B dense model purpose-tuned for agentic coding (SWE-bench leaderboard). Uses Unsloth's dynamic Q5 quant (UD-Q5_K_XL, ~17 GB) for a fair comparison against the Qwen Q5_K_M baseline.
+### `glmair-serve` (alternate model)
+Serves Z.ai's [`GLM-4.5-Air`](https://huggingface.co/zai-org/GLM-4.5-Air) ([GitHub](https://github.com/zai-org/GLM-4.5)) — a 106 B MoE (~12 B active) from the GLM-4.5 "ARC" family (Agentic, Reasoning, Coding), purpose-tuned for tool-using agents. Uses Unsloth's dynamic Q3 quant (UD-Q3_K_XL, ~55 GB across two shards) — the largest variant that fits on a 64 GB Apple Silicon Mac with KV-cache headroom.
 
 ```bash
 # Install once (assumes `hf` on PATH — see Python tooling)
-mkdir -p ~/models/devstral-small-2507
+mkdir -p ~/models/glm-4.5-air
 HF_HUB_ENABLE_HF_TRANSFER=1 hf download \
-  unsloth/Devstral-Small-2507-GGUF Devstral-Small-2507-UD-Q5_K_XL.gguf \
-  --local-dir ~/models/devstral-small-2507
-cp scripts/devstral-serve ~/bin/ && chmod +x ~/bin/devstral-serve
+  unsloth/GLM-4.5-Air-GGUF --include "UD-Q3_K_XL/*" \
+  --local-dir ~/models/glm-4.5-air
+cp scripts/glmair-serve ~/bin/ && chmod +x ~/bin/glmair-serve
 
 # Serve (stop other llama-server processes first)
-devstral-serve
+glmair-serve
 
 # In pi
-pi --model local-devstral-small-2507
+pi --model local-glm-4.5-air
 ```
 
-Defaults: `CTX=131072`, sampler temp 0.15 (Mistral's recommendation — lower than Qwen's 0.6 for agent stability). The GGUF's embedded Mistral chat template handles tool calls correctly out of the box; no `--chat-template-file` override needed.
+**Required first:** raise macOS's Metal wired-memory cap or inference will return HTTP 500 with `kIOGPUCommandBufferCallbackErrorOutOfMemory`. The 51 GiB weights exceed the default ~44 GB cap on a 64 GB Mac:
 
-The `local-` prefix on the model id avoids a collision with pi's built-in `devstral-small-2507` entry (which routes to `api.mistral.ai` and requires a `MISTRAL_API_KEY`). See [Troubleshooting → pi routes to a cloud provider](#pi-routes-to-a-cloud-provider-instead-of-localhost).
+```bash
+sudo sysctl iogpu.wired_limit_mb=57344   # 56 GB cap, leaves 8 GB for OS
+```
+
+Non-persistent (resets on reboot). See [troubleshooting](#kiogpucommandbuffercallbackerroroutofmemory-during-inference) for the persistent variant.
+
+Defaults: `CTX=32768` (not 131k — KV budget is tight at this model size; q8_0 KV cache is on by default to halve memory), sampler temp 0.6 / top-p 0.95 (Z.ai's official GLM-4.5 recipe). Unsloth's GGUFs embed a corrected chat template that fixes the upstream tool-call format bug, so `--jinja` alone is enough — no `--chat-template-file` override needed (unlike Qwen3-Coder).
+
+llama.cpp loads sharded GGUFs automatically when you point at the `-00001-of-00002` shard; the second shard must be in the same directory.
 
 ## Tool calling
 
@@ -380,18 +419,47 @@ You probably forgot `--jinja`. Without it llama.cpp falls back to a generic temp
 Tool-call format bug in the GGUF's embedded template. Run `fetch-template` and restart `qwen-serve`. See [Tool calling](#tool-calling).
 
 ### pi routes to a cloud provider instead of localhost
-If `pi --model <X>` fails with `Error: No API key found for mistral` (or `openai`, `groq`, etc.) and the footer shows a built-in provider like `(mistral) <X>` next to your model name, the model `id` in your `models.json` is colliding with one of pi's built-in model entries. pi has its own registry of public model IDs (`mistral/devstral-small-2507`, `openai/gpt-oss-20b`, etc.) and resolves `--model X` against built-ins before custom providers.
+If `pi --model <X>` fails with `Error: No API key found for openai` (or `groq`, `mistral`, etc.) and the footer shows a built-in provider like `(openai) <X>` next to your model name, the model `id` in your `models.json` is colliding with one of pi's built-in model entries. pi has its own registry of public model IDs (`openai/gpt-oss-20b`, `mistral/devstral-small-2507`, etc.) and resolves `--model X` against built-ins before custom providers.
 
-Fix: rename the model `id` in `~/.pi/agent/models.json` to something unique — this repo prefixes locally-served alternates with `local-`, e.g. `local-devstral-small-2507`, `local-gpt-oss-20b`. The matching `-a` alias passed to `llama-server` (set via `ALIAS=` in the serve scripts) must change in lockstep, or `pi --list-models` will report a model id the server doesn't actually answer to.
+Fix: rename the model `id` in `~/.pi/agent/models.json` to something unique — this repo prefixes locally-served alternates with `local-`, e.g. `local-gpt-oss-20b`, `local-glm-4.5-air`. The matching `-a` alias passed to `llama-server` (set via `ALIAS=` in the serve scripts) must change in lockstep, or `pi --list-models` will report a model id the server doesn't actually answer to.
 
 Verify with `pi --list-models | grep local-llamacpp` — you should see your renamed ids only under the `local-llamacpp` provider.
 
 ### Out of memory at load
 The default context is 131k, sized for a 64 GB Mac. On a 32 GB Mac, drop it: `CTX=32768 qwen-serve` (or `CTX=65536` if tight is OK). Failing that, drop the quant (Q5_K_M → Q4_K_M). You can also halve KV-cache memory with `--cache-type-k q8_0 --cache-type-v q8_0` — see [Choosing a quant](#choosing-a-quant).
 
-## Alternative: mistral.rs (Rust)
+### `kIOGPUCommandBufferCallbackErrorOutOfMemory` during inference
+Different failure mode from the load-time OOM above. The model loads fine, then the first `chat/completions` request returns HTTP 500 and the server log shows:
 
-[mistral.rs](https://github.com/EricLBuehler/mistral.rs) is the Rust-native inference server. It supports Qwen3 MoE and Metal, and also serves an OpenAI-compatible API. The only structural difference for pi is the `baseUrl` and the model `id` (mistral.rs reports the loaded model as `default` unless overridden).
+```
+error: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory)
+```
+
+This happens when the GGUF is large enough (≥ ~45 GB) that the *weights themselves* exceed macOS's default Metal wired-memory cap. On a 64 GB Mac that cap is ~44 GB (≈ 67% of total RAM) — anything above it can't be allocated to the GPU and inference fails the first time Metal touches an unwired page. The KV-cache compression knob from the previous tip doesn't help here, because the problem is the weights, not the KV cache. Hit while serving `GLM-4.5-Air-UD-Q3_K_XL` (~55 GB) and `gpt-oss-120b` (~63 GB).
+
+Raise the cap with `sysctl`:
+
+```bash
+sudo sysctl iogpu.wired_limit_mb=57344    # 56 GB — leaves 8 GB for OS/apps on a 64 GB Mac
+```
+
+Safe upper bound is `total_RAM_MB - 8192` (leave 8 GB for the OS). The change is non-persistent — to make it survive reboot, add a `/Library/LaunchDaemons/com.local.iogpu-limit.plist` running the same `sysctl` at boot, or add the line to `/etc/sysctl.conf` (depending on macOS version).
+
+Verify with:
+
+```bash
+sysctl iogpu.wired_limit_mb
+```
+
+Setting it back to `0` restores the macOS default.
+
+## Alternative inference engines (Rust)
+
+llama.cpp is the default in this repo because its Metal backend is mature, Homebrew ships precompiled binaries, and the GGUF + jinja-template path is well-trodden for tool calling. But pi only cares about the OpenAI-compatible HTTP shape — any server that speaks `/v1/chat/completions` and emits structured `tool_calls` is a drop-in replacement. A few Rust-native engines worth A/B-ing on this hardware:
+
+### mistral.rs (primary alternate)
+
+[mistral.rs](https://github.com/EricLBuehler/mistral.rs) is the most mature Rust-native option. Built on Candle, optimized Metal backend, OpenAI-compatible HTTP server. Supports Qwen3 MoE and the other architectures used here. The only structural difference for pi is the `baseUrl` and the model `id` (mistral.rs reports the loaded model as `default` unless overridden).
 
 The catch on macOS: building it requires the Metal shader compiler, which ships only with **full Xcode** (not Command Line Tools). If you don't already have Xcode installed, llama.cpp is the friction-free path. If you do:
 
@@ -405,6 +473,15 @@ mistralrs-server --port 8080 gguf \
 ```
 
 Then change `id` to `default` in `models.json` and you're off.
+
+### Other Rust engines worth tracking
+
+Neither is the default path yet — each is here as a candidate to benchmark against mistral.rs once the llama.cpp baseline is solid.
+
+- **[candle-vllm](https://github.com/EricLBuehler/candle-vllm)** — same author as mistral.rs. Aims to bring vLLM-style continuous batching to Candle, with an OpenAI-compatible server. Less mature than mistral.rs; worth tracking but not first.
+- **[Crane](https://github.com/lucasjinreal/Crane)** — Candle-based, OpenAI-compatible via `crane-oai`. Claims ~6× M-series speedup vs llama.cpp; newer, less battle-tested. Worth a benchmark but I wouldn't rely on it for daily use yet.
+
+Both build with `cargo install` and the same Xcode/Metal requirement as mistral.rs. To wire either into pi, point a new entry in `~/.pi/agent/models.json` at the engine's port and use whatever id it advertises at `/v1/models`.
 
 ## Benchmarking
 
@@ -454,11 +531,24 @@ Real runs on Apple M1 Max, 64 GB, llama.cpp build `2e97c5f96 (9100)`:
 | gpt-oss 20B MXFP4 MoE | 11.27 GiB | 20.91 B | BLAS,MTL |       8 |  1 |  pp8192+tg128 |   544.15 ± 3.87 |
 ```
 
+**GLM-4.5-Air (Unsloth UD-Q3_K_XL, 51.01 GiB, 110.47 B params, 12 B active)**
+```
+| model                           |      size |   params | backend  | threads | fa |          test |             t/s |
+| ------------------------------- | --------: | -------: | -------- | ------: | -: | ------------: | --------------: |
+| glm4moe 106B.A12B Q3_K - Medium | 51.01 GiB | 110.47 B | BLAS,MTL |       8 |  1 |         pp512 |   160.62 ± 1.25 |
+| glm4moe 106B.A12B Q3_K - Medium | 51.01 GiB | 110.47 B | BLAS,MTL |       8 |  1 |        pp2048 |   150.45 ± 1.76 |
+| glm4moe 106B.A12B Q3_K - Medium | 51.01 GiB | 110.47 B | BLAS,MTL |       8 |  1 |        pp8192 |   116.98 ± 0.47 |
+| glm4moe 106B.A12B Q3_K - Medium | 51.01 GiB | 110.47 B | BLAS,MTL |       8 |  1 |         tg128 |    20.57 ± 0.08 |
+| glm4moe 106B.A12B Q3_K - Medium | 51.01 GiB | 110.47 B | BLAS,MTL |       8 |  1 |         tg512 |    19.82 ± 0.30 |
+| glm4moe 106B.A12B Q3_K - Medium | 51.01 GiB | 110.47 B | BLAS,MTL |       8 |  1 |  pp8192+tg128 |   104.77 ± 1.50 |
+```
+
 Reading the numbers:
-- **Prefill scaling.** Both models slow down with longer prompts (Qwen 594→409, gpt-oss 756→651 from pp512 to pp8192). The drop is gentler on gpt-oss — fewer total parameters means less compute per token at prefill time.
+- **Prefill scaling.** All three models slow down with longer prompts (Qwen 594→409, gpt-oss 756→651, GLM 161→117 from pp512 to pp8192). The drop is gentler on gpt-oss — fewer total parameters means less compute per token at prefill time.
 - **Decode is steady within a model** (`tg128` ≈ `tg512`). It's bandwidth-bound, not compute-bound, so generation length barely matters.
-- **gpt-oss is ~1.2–1.6× faster across the sweep**, with the gap widest at `pp8192+tg128` — the agent-realistic combined run. For long-context tool-using sessions, that's the headline number.
-- **MoE throughput moves with quant, batch size, context length, and what else is on the GPU.** Reproduce both runs on your own hardware before reading too much into the deltas.
+- **gpt-oss is ~1.2–1.6× faster than Qwen across the sweep**, with the gap widest at `pp8192+tg128` — the agent-realistic combined run.
+- **GLM-4.5-Air is ~3–4× slower than Qwen and ~5–6× slower than gpt-oss.** Two effects compound: 12 B active params (4× Qwen's 3 B) means more compute per token, and the 51 GiB weights run right against the 56 GB Metal wired-memory cap, so any page miss is expensive. The architectural prediction (decode slowdown ≈ active-param ratio) holds: 50.8 / 20.6 ≈ 2.5×, matched closely. Coding-agent usable at ~20 tok/s decode, but you feel the long-context prefill.
+- **MoE throughput moves with quant, batch size, context length, and what else is on the GPU.** Reproduce all runs on your own hardware before reading too much into the deltas.
 
 Overrides for the wrapper:
 ```bash
@@ -543,7 +633,7 @@ pi_sandbox/
 ├── scripts/
 │   ├── qwen-serve       # start llama-server for Qwen3-Coder-30B-A3B
 │   ├── gptoss-serve     # alternate: OpenAI gpt-oss-20b
-│   ├── devstral-serve   # alternate: Mistral Devstral-Small-2507
+│   ├── glmair-serve     # alternate: Z.ai GLM-4.5-Air (106B MoE)
 │   ├── serve-stop       # kill whatever llama-server is on port 8080
 │   ├── qwen-test        # one-shot chat-completion smoke test
 │   ├── tool-call-test   # model-agnostic check that pi-style tool_calls fire
