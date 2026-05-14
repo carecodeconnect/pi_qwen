@@ -48,27 +48,37 @@ if [[ -z "${PARSER:-}" ]]; then
   esac
 fi
 
-# Auto-pick reasoning parser too (only set if user didn't pass --reasoning-parser
-# explicitly, which would be in "$@"). Valid: qwen3/deepseek_r1/gpt_oss/harmony/
-# gemma4/glm4.
+# Auto-pick reasoning parser. Valid: qwen3/deepseek_r1/gpt_oss/harmony/gemma4/glm4.
+#
+# Caveat (empirical, 2026-05-14): pairing --reasoning-parser with certain
+# tool-call parsers can break tool-call extraction. Specifically:
+# - gpt-oss + harmony tool-call + gpt_oss reasoning → tool calls leak into
+#   content text and tool-call-test fails. Leaving reasoning off for gpt-oss
+#   until vllm-mlx upstream fixes the interaction.
+# - GLM-4.5 + glm47 tool-call + glm4 reasoning → confirmed working.
+#
+# Pass --reasoning-parser <foo> on the command line to override / force on.
 REASONING_ARGS=()
 if [[ "$*" != *--reasoning-parser* ]]; then
   case "$MODEL_LC" in
-    *gpt-oss*|*gptoss*)                  REASONING_ARGS=(--reasoning-parser gpt_oss) ;;
     *glm-4.7*|*glm4.7*|*glm-4.5*|*glm4.5*) REASONING_ARGS=(--reasoning-parser glm4) ;;
     *qwen3*)                             REASONING_ARGS=(--reasoning-parser qwen3) ;;
     *deepseek-r1*|*deepseekr1*)          REASONING_ARGS=(--reasoning-parser deepseek_r1) ;;
     *gemma-4*|*gemma4*)                  REASONING_ARGS=(--reasoning-parser gemma4) ;;
+    # gpt-oss intentionally omitted — breaks tool calling on vllm-mlx 0.3.0
   esac
 fi
 
 # shellcheck disable=SC1091
 source "$VENV/bin/activate"
 
-echo "vllm-mlx-serve: model=$MODEL  tool=$PARSER  reasoning=${REASONING_ARGS[1]:-none}  $HOST:$PORT"
+REASONING_NAME="${REASONING_ARGS[1]:-none}"
+echo "vllm-mlx-serve: model=$MODEL  tool=$PARSER  reasoning=$REASONING_NAME  $HOST:$PORT"
+# Bash 3.2 (macOS default) chokes on "${empty_array[@]}" under set -u.
+# The ${ARRAY[@]+...} form only expands when the array is set.
 exec vllm-mlx serve "$MODEL" \
   --host "$HOST" --port "$PORT" \
   --enable-auto-tool-choice \
   --tool-call-parser "$PARSER" \
-  "${REASONING_ARGS[@]}" \
+  ${REASONING_ARGS[@]+"${REASONING_ARGS[@]}"} \
   "$@"

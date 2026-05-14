@@ -238,7 +238,7 @@ Three of the four production models now have working vllm-mlx paths (verified en
 | Model | vllm-mlx status | Recommended engine | Why |
 |---|---|---|---|
 | Qwen3-Coder-30B-A3B | ✓ verified | `vllm-mlx-serve` | +25% decode vs llama.cpp; ~7 s first-turn TTFT in pi |
-| gpt-oss-20b | ✓ verified | `vllm-mlx-serve` | ~6 s TTFT (fastest of the set); Harmony tool + reasoning parsers wired in |
+| gpt-oss-20b | ✗ tool calls broken on vllm-mlx 0.3.0 | llama.cpp (`gptoss-serve`) | Known upstream issue. Model emits correct Harmony output but vllm-mlx's `/v1/chat/completions` adapter doesn't run the Harmony tool-call parser. **Upstream vLLM fixed this** in [vllm#26083](https://github.com/vllm-project/vllm/issues/26083) (closed 2026-02-15), but vllm-mlx 0.3.0 hasn't inherited the fix — its maintainer pivoted to the official [`vllm-project/vllm-metal`](https://github.com/vllm-project/vllm-metal) plugin instead (vllm-mlx [#123](https://github.com/waybarrios/vllm-mlx/issues/123), 2026-02-28). gpt-oss support in vllm-metal is tracked at [vllm-metal#212](https://github.com/vllm-project/vllm-metal/issues/212), still open. |
 | GLM-4.5-Air | ✓ verified | llama.cpp (`glmair-serve`) | vllm-mlx works but only +11% decode AND has 26 s prefill cost — see [prefill latency note](./11-prompt-engineering.md#dont-ignore-prefill-latency-on-big-context-pi-sessions) |
 | Qwen3-Coder-Next-80B | not yet tested | llama.cpp (`qwennext-serve`) | same XML tool-call format as Qwen3-Coder-30B; likely works on vllm-mlx but unverified |
 
@@ -253,6 +253,12 @@ The `~/bin/vllm-mlx-serve` wrapper auto-picks both the tool-call parser and reas
 - Other Llama-3+, Mistral, DeepSeek, Gemma-4 also covered
 
 so just `~/bin/vllm-mlx-serve <hf-id>` does the right thing across these four model families.
+
+### Watch-list: `vllm-project/vllm-metal` (vllm-mlx's successor)
+
+`waybarrios/vllm-mlx` is the community fork we currently use; its maintainer announced in [#123](https://github.com/waybarrios/vllm-mlx/issues/123) that further work is going into the official `vllm-project/vllm-metal` plugin instead. vllm-metal is actively developed (commits daily as of 2026-05-14), 1140+ stars, and tracks upstream vLLM closely — so it will pick up fixes like the gpt-oss tool-call resolution faster than vllm-mlx will.
+
+When gpt-oss tool calling lands in vllm-metal (tracked at [#212](https://github.com/vllm-project/vllm-metal/issues/212)), it's worth porting `install/vllm-mlx.sh` to `install/vllm-metal.sh` — same uv/clone/install pattern, different upstream. That would unlock all four production models on a single non-llama.cpp engine.
 
   Install (uses `uv` per this repo's convention — see [[feedback-use-uv-for-python]] memory, and `pyproject.toml` / `uv.lock`):
 
