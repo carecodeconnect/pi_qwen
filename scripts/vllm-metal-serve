@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# Wrapper around `vllm serve` (vllm-project/vllm-metal — official Apple
+# Silicon plugin to upstream vLLM). Mirrors the qwen-serve/gptoss-serve
+# pattern — activates the project venv, picks the right tool-call and
+# reasoning parsers, binds 127.0.0.1:8001 by default.
+#
+# Usage:
+#   vllm-metal-serve <model>                   # auto-pick parsers from name
+#   PARSER=hermes vllm-metal-serve <model>     # override tool-call parser
+#   PORT=8003 vllm-metal-serve <model>
+#
+# See docs/07-engines.md "vllm-project/vllm-metal" for setup details.
+set -euo pipefail
+
+VENV="${VENV:-$HOME/.venv-vllm-metal}"
+if [[ ! -f "$VENV/bin/vllm" ]]; then
+  echo "error: vllm-metal venv not found at $VENV" >&2
+  echo "       run install/vllm-metal.sh first" >&2
+  exit 1
+fi
+
+MODEL="${MODEL:-${1:-}}"
+if [[ -z "$MODEL" ]]; then
+  echo "Usage: vllm-metal-serve <model> [extra-flags...]" >&2
+  exit 1
+fi
+shift || true
+
+HOST="${HOST:-127.0.0.1}"
+PORT="${PORT:-8001}"
+
+# Tool-call parser names per vLLM 0.20+ (upstream-canonical, NOT the vllm-mlx
+# 0.3.0 names — they differ). Notably: gpt-oss → `openai` (not `harmony`),
+# GLM-4.5 → `glm45` (vllm-mlx called it `glm47`).
+MODEL_LC="$(printf '%s' "$MODEL" | tr '[:upper:]' '[:lower:]')"
+if [[ -z "${PARSER:-}" ]]; then
+  case "$MODEL_LC" in
+    *qwen3-coder*|*qwen3coder*|*qwen2.5-coder*) PARSER="qwen3_coder" ;;
+    *qwen3-xml*|*qwen3xml*)                     PARSER="qwen3_xml" ;;
+    *gpt-oss*|*gptoss*)                         PARSER="openai" ;;
+    *glm-4.7*|*glm4.7*)                         PARSER="glm47" ;;
+    *glm-4.5*|*glm4.5*)                         PARSER="glm45" ;;
+    *llama-3*|*llama3*)                         PARSER="llama3_json" ;;
+    *llama-4*|*llama4*)                         PARSER="llama4_json" ;;
+    *deepseek-v3*|*deepseekv3*)                 PARSER="deepseek_v3" ;;
+    *deepseek-v4*|*deepseekv4*)                 PARSER="deepseek_v4" ;;
+    *kimi*)                                     PARSER="kimi_k2" ;;
+    *mistral*|*devstral*)                       PARSER="mistral" ;;
+    *hermes*)                                   PARSER="hermes" ;;
+    *)
+      echo "error: no known tool-call parser for model '$MODEL'." >&2
+      echo "       set PARSER=<one of: qwen3_coder|openai|glm45|hermes|...> manually," >&2
+      echo "       or run: vllm serve --help=tool-call-parser  for the full list." >&2
+      exit 1
+      ;;
+  esac
+fi
+
+# Reasoning parser auto-pick. The registered vLLM 0.20+ names (verified via
+# ReasoningParserManager) are: deepseek_r1, deepseek_v3, deepseek_v4, ernie45,
+# gemma4, glm45, granite, holo2, hunyuan_a13b, hy_v3, kimi_k2, mimo,
+# minimax_m2, minimax_m2_append_think, mistral, nemotron_v3, olmo3,
+# openai_gptoss, qwen3, seed_oss, step3, step3p5.
+REASONING_ARGS=()
+if [[ "$*" != *--reasoning-parser* ]]; then
+  case "$MODEL_LC" in
+    *gpt-oss*|*gptoss*)              REASONING_ARGS=(--reasoning-parser openai_gptoss) ;;
+    *glm-4.5*|*glm4.5*)              REASONING_ARGS=(--reasoning-parser glm45) ;;
+    *qwen3*)                         REASONING_ARGS=(--reasoning-parser qwen3) ;;
+    *deepseek-r1*|*deepseekr1*)      REASONING_ARGS=(--reasoning-parser deepseek_r1) ;;
+    *deepseek-v3*|*deepseekv3*)      REASONING_ARGS=(--reasoning-parser deepseek_v3) ;;
+    *gemma-4*|*gemma4*)              REASONING_ARGS=(--reasoning-parser gemma4) ;;
+    *kimi*)                          REASONING_ARGS=(--reasoning-parser kimi_k2) ;;
+    *seed-oss*|*seedoss*)            REASONING_ARGS=(--reasoning-parser seed_oss) ;;
+  esac
+fi
+
+REASONING_NAME="${REASONING_ARGS[1]:-none}"
+echo "vllm-metal-serve: model=$MODEL  tool=$PARSER  reasoning=$REASONING_NAME  $HOST:$PORT"
+
+exec "$VENV/bin/vllm" serve "$MODEL" \
+  --host "$HOST" --port "$PORT" \
+  --enable-auto-tool-choice \
+  --tool-call-parser "$PARSER" \
+  ${REASONING_ARGS[@]+"${REASONING_ARGS[@]}"} \
+  "$@"

@@ -254,11 +254,23 @@ The `~/bin/vllm-mlx-serve` wrapper auto-picks both the tool-call parser and reas
 
 so just `~/bin/vllm-mlx-serve <hf-id>` does the right thing across these four model families.
 
-### Watch-list: `vllm-project/vllm-metal` (vllm-mlx's successor)
+## MLX in Python: `vllm-metal` (vllm-mlx's official successor)
 
-`waybarrios/vllm-mlx` is the community fork we currently use; its maintainer announced in [#123](https://github.com/waybarrios/vllm-mlx/issues/123) that further work is going into the official `vllm-project/vllm-metal` plugin instead. vllm-metal is actively developed (commits daily as of 2026-05-14), 1140+ stars, and tracks upstream vLLM closely — so it will pick up fixes like the gpt-oss tool-call resolution faster than vllm-mlx will.
+`waybarrios/vllm-mlx` is the community fork we previously used; its maintainer announced in [#123](https://github.com/waybarrios/vllm-mlx/issues/123) that further work is going into the official `vllm-project/vllm-metal` plugin instead. vllm-metal is actively developed (commits daily as of 2026-05-14), 1140+ stars, and tracks upstream vLLM closely — so it picks up fixes like the gpt-oss tool-call resolution faster than vllm-mlx does.
 
-When gpt-oss tool calling lands in vllm-metal (tracked at [#212](https://github.com/vllm-project/vllm-metal/issues/212)), it's worth porting `install/vllm-mlx.sh` to `install/vllm-metal.sh` — same uv/clone/install pattern, different upstream. That would unlock all four production models on a single non-llama.cpp engine.
+Install via `install/vllm-metal.sh` (uses the upstream one-line installer, idempotent):
+
+```bash
+bash install/vllm-metal.sh
+```
+
+The wrapper `~/bin/vllm-metal-serve` mirrors `vllm-mlx-serve` but uses the upstream-canonical parser names (which differ from vllm-mlx 0.3.0 — notably `openai` for gpt-oss instead of `harmony`, and `glm45` instead of `glm47`).
+
+### vllm-metal empirical results (2026-05-14)
+
+| MLX model | tool-call-test | Notes |
+|---|---|---|
+| `mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit-DWQ` | ✓ PASS | `--tool-call-parser qwen3_coder --reasoning-parser qwen3` (auto-picked). Same parser semantics as on vllm-mlx — clean swap. |
 
   Install (uses `uv` per this repo's convention — see [[feedback-use-uv-for-python]] memory, and `pyproject.toml` / `uv.lock`):
 
