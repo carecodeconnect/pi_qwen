@@ -156,6 +156,66 @@ Underneath higgs, the binding layer is **[oxideai/mlx-rs](https://github.com/oxi
 
   Same no-Xcode property as higgs — MLX is Apple's own ML framework, distributed as pre-built Python wheels with the Metal shaders already compiled. **No full Xcode and no Apple ID required to install.**
 
+### vllm-mlx empirical results (2026-05-14)
+
+Tested specifically against the egress-parser gap that blocks Qwen3-Coder-30B on higgs. Result: vllm-mlx has a dedicated `qwen3_coder` parser (one of 17 — `auto`/`mistral`/`qwen`/`qwen3_coder`/`llama`/`hermes`/`harmony`/`gpt-oss`/`deepseek`/`kimi`/`granite`/`nemotron`/`xlam`/`functionary`/`gemma4`/`glm47`/`minimax`) that correctly parses Qwen3-Coder's XML tool-call format into structured `tool_calls`.
+
+Install (uv, project-clone, ~30 s on a fast connection):
+
+```bash
+git clone https://github.com/waybarrios/vllm-mlx.git ~/src/vllm-mlx
+cd ~/src/vllm-mlx
+uv venv && uv pip install -e .
+```
+
+Launch with Qwen3-Coder parser (port 8001 — keeps llama-server on 8080 and higgs on 8002 untouched):
+
+```bash
+source ~/src/vllm-mlx/.venv/bin/activate
+vllm-mlx serve mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit-DWQ \
+  --port 8001 --host 127.0.0.1 \
+  --enable-auto-tool-choice \
+  --tool-call-parser qwen3_coder
+```
+
+Verify with tool-call-test:
+
+```bash
+PORT=8001 ALIAS=mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit-DWQ tool-call-test
+# → PASS: structured tool_calls returned
+```
+
+Wire into pi (`~/.pi/agent/models.json`):
+
+```json
+"local-vllm-mlx": {
+  "baseUrl": "http://127.0.0.1:8001/v1",
+  "api": "openai-completions",
+  "apiKey": "not-needed",
+  "models": [{
+    "id": "mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit-DWQ",
+    "name": "Qwen3-Coder-30B (local, MLX via vllm-mlx)",
+    "reasoning": false,
+    "contextWindow": 32768,
+    "maxTokens": 8192
+  }]
+}
+```
+
+### Three-way decode benchmark: Qwen3-Coder-30B on this M1 Max
+
+Same prompt, same `max_tokens=256`, 3 runs each, no `/no_think` (Qwen3-Coder isn't a thinking model):
+
+| Engine | Quant | TTFT | Decode | Tool calls work? |
+|---|---|---|---|---|
+| llama.cpp | Q5_K_M GGUF | 194 ms | 48.1 tok/s | ✓ via `--jinja` + Qwen official template |
+| higgs (Rust+MLX) | 4bit-DWQ | 354 ms | 57.7 tok/s (+20%) | ✗ XML parser gap |
+| **vllm-mlx (Python+MLX)** | 4bit-DWQ | 435 ms | **60.1 tok/s (+25%)** | ✓ via `--tool-call-parser qwen3_coder` |
+
+**Verdict for Qwen3-Coder-30B specifically: vllm-mlx is the best option** on this hardware right now — fastest decode AND working tool calling. higgs is faster than llama.cpp on raw decode but unusable for tool calling on this model. llama.cpp remains the simplest setup.
+
+For pi daily use, switching `qwen3-coder-30b-a3b` from `local-llamacpp` to `local-vllm-mlx` is a ~25% decode speedup with no quality difference at the same 4-bit-class quant. Trade-off: vllm-mlx is a Python service that needs the venv activated, slightly more setup than `qwen-serve`.
+
   Install (uses `uv` per this repo's convention — see [[feedback-use-uv-for-python]] memory, and `pyproject.toml` / `uv.lock`):
 
   ```bash
