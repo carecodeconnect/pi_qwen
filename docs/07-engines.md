@@ -60,10 +60,19 @@ Wire into pi the same way as any other engine: add a provider entry in `~/.pi/ag
 | MLX model | tool-call-test | Notes |
 |---|---|---|
 | `mlx-community/Qwen3-1.7B-4bit` | ✓ PASS | Structured `tool_calls` returned cleanly for `get_weather`. Verified end-to-end with this exact command: `PORT=8002 ALIAS=qwen3-1.7b tool-call-test`. |
-| `mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit` | _pending download_ | MLX equivalent of the repo's default llama.cpp model. Same architecture family as Qwen3-1.7B, so high prior on tool calling working. |
-| `mlx-community/gpt-oss-20b-MXFP4-Q4` | _pending download_ | MLX equivalent of `local-gpt-oss-20b`. Uses OpenAI's Harmony format — higgs needs to render Harmony correctly for tool calls to fire. |
+| `mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit` | ✗ FAIL (quant) | Loads (architecture `qwen3_moe` is supported), but inference 500s with `MLX error: [quantized_matmul] shapes incompatible`. Root cause: this MLX-community quant uses **mixed precision** — most weights at 4-bit + MoE gates at 8-bit. higgs/mlx-rs only handles uniform-precision quantization. Workaround: use the **`-4bit-DWQ`** or **`-8bit`** variant of the same model (both use uniform quant, verified via `config.json`). |
+| `mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit-DWQ` | _pending download_ | Uniform-quant retry of the 30B test above. Expected to pass given Qwen3-1.7B worked. |
+| `mlx-community/gpt-oss-20b-MXFP4-Q4` | ✗ FAIL (arch) | Architecture `gpt_oss` not supported by higgs 1.2.0 / `mlx-rs` — load fails at startup with `Error: Model(UnsupportedModel("gpt_oss"))`. higgs currently recognizes `llama`, `qwen3_moe`, and a small set of other families. Until upstream adds `gpt_oss`, route gpt-oss-20b workflows through llama.cpp instead. |
 | `mlx-community/GLM-4.5-Air-4bit` | _pending download_ | MLX equivalent of `local-glm-4.5-air`. GLM has its own chat template format; verifying higgs handles it. |
-| `mlx-community/Llama-3.2-1B-Instruct-4bit` | ✗ FAIL | Jinja template error: `too many arguments (in chat:61)`. Not a higgs bug — Meta's Llama-3.2 1B doesn't ship a tool-call-aware chat template (tool support starts at 3B+). Same failure shape as the DeepSeek-Coder-V2-Lite rejection in [`docs/02-models.md`](./02-models.md#tested-and-rejected). |
+| `mlx-community/Llama-3.2-1B-Instruct-4bit` | ✗ FAIL (template) | Jinja template error: `too many arguments (in chat:61)`. Not a higgs bug — Meta's Llama-3.2 1B doesn't ship a tool-call-aware chat template (tool support starts at 3B+). Same failure shape as the DeepSeek-Coder-V2-Lite rejection in [`docs/02-models.md`](./02-models.md#tested-and-rejected). |
+
+**Three failure modes seen so far, each distinct:**
+
+- **Architecture unsupported** (`gpt_oss`) — load fails. Hard wall until higgs/mlx-rs ships the family.
+- **Quantization layout** (mixed-precision MoE) — load succeeds, inference 500s. Workaround: pick a uniform-quant variant from `mlx-community`.
+- **Model template** (no tool-call grammar in chat template) — load + inference succeed, but `tools=[...]` confuses the renderer. Workaround: pick a model whose Jinja template was written for tool calling (Qwen3 family, Qwen2.5-Coder, Llama-3.2-3B+).
+
+Always run `tool-call-test` after wiring a new MLX model into higgs — these failures are too varied to predict from the model card alone.
 
 Rule of thumb: on higgs, **pick MLX models with documented tool-call training** (Qwen3 family, Qwen2.5-Coder, Llama-3.2-3B+, GLM-4.5-Air, gpt-oss). Skip 1B-class instruct models — they predate the structured-tool-call norm at that size.
 
