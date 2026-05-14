@@ -13,4 +13,9 @@ Upstream commit: shallow clone of `main` branch on 2026-05-14.
 Apache 2.0 license: see <https://www.apache.org/licenses/LICENSE-2.0>. Notable terms:
 
 - Attribution required (this file).
-- Modifications must be marked. No modifications have been made to the vendored content; if any are made in the future, note them in the skill's `SKILL.md` body.
+- Modifications must be marked.
+
+### Modifications
+
+- `mermaid/SKILL.md` (2026-05-14): expanded to document the iterate-and-validate workflow, common syntax pitfalls, and a section on the new `format.sh`. Original upstream version was validation-only.
+- `mermaid/tools/format.sh` (2026-05-14): added. Wraps `mermaidfmt` (`mermaid-formatter` npm package) to provide a `cargo fmt`-equivalent. Original upstream had no formatter, only `validate.sh`.
