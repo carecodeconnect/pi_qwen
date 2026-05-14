@@ -1,6 +1,11 @@
 {
   "packages": [
     "npm:pi-web-access",
-    "npm:pi-hooks"
+    {
+      "source": "npm:pi-hooks",
+      "extensions": [
+        "-ralph-loop/ralph-loop.ts"
+      ]
+    }
   ]
 }

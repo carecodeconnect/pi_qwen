@@ -56,11 +56,43 @@ Web search + content extraction. Registers a `web_search` tool. Zero-config out 
 | `lsp-tool` | On-demand LSP queries: definitions, references, hover, symbols, signatures. | **On** | Always — composes with `lsp` above. |
 | `permission` | Layered guardrails: Minimal (read-only), Low (file edits), Medium (dev commands), High (everything; dangerous commands still prompt). First launch asks which level. | **On**, prompts for level | Always. For sandbox work with local models running unsupervised, **Medium** is the sensible default. Use `/permission` to change. |
 | `checkpoint` | Captures repo state at every turn as a git ref. Lets you restore "files + conversation," "conversation only," or "files only" after branching a session. | **On** | When you want to experiment with the same prompt across different models (Qwen vs gpt-oss vs GLM) and roll back cleanly. |
-| `ralph-loop` | Subagent loop with exit condition. Adds a `ralph_loop` tool that runs a single or chain task until a condition returns false. | **On** | Iterative "fix until clean" workflows — lint loops, test-loop-until-green, etc. |
+| `ralph-loop` | Subagent loop with exit condition. Adds a `ralph_loop` tool that runs a single or chain task until a condition returns false. | **Off in this repo** (default On) | See "Disabling ralph-loop" note below — needs a stronger model than gpt-oss-20b reliably provides. Re-enable for Sonnet, GLM-4.5-Air, or other agent-tuned models. |
 | `repeat` | Re-runs the previous turn with a slash command. | **On** | Quick re-prompt without retyping. |
 | `token-rate` | Footer widget showing decode tok/s of the active model. | **On** | Useful for the multi-model sandbox — surfaces the live decode rate when comparing models. |
 
-The seven were not individually selected — they ship together in the `pi-hooks` package. `/extensions` (or whatever the equivalent slash-command is in your pi version) shows the current enable/disable state.
+The seven were not individually selected — they ship together in the `pi-hooks` package. Use `pi config` (interactive TUI) to enable/disable individual extensions in the bundle.
+
+### Disabling individual extensions in a bundle
+
+`pi config` writes the enable/disable state into `.pi/settings.json` using a `-` prefix on the extension path. After disabling `ralph-loop` for this repo:
+
+```json
+{
+  "packages": [
+    "npm:pi-web-access",
+    {
+      "source": "npm:pi-hooks",
+      "extensions": [
+        "-ralph-loop/ralph-loop.ts"
+      ]
+    }
+  ]
+}
+```
+
+The `-` means "exclude this entry from the bundle's default extension list." Every other entry in the package's `pi.extensions` array stays enabled. To re-enable, run `pi config` again and re-check the box, or hand-edit `settings.json` to remove the `-` line.
+
+### Disabling ralph-loop in this repo
+
+Empirical finding from this sandbox: `ralph-loop` is not reliably usable on **gpt-oss-20b**. The tool exposes an optional `agent` parameter that defaults to a built-in `worker` fallback ([upstream README](https://github.com/prateekmedia/pi-hooks/blob/main/ralph-loop/README.md)); gpt-oss-20b doesn't internalize the default and fills in invented values like `agent: "user"`, which triggers a `path argument must be of type string` error inside the extension. Two attempts on 2026-05-14 both ended with the model in a wrong-path loop scanning the filesystem for nonexistent agent definitions instead of recovering.
+
+Reserve `ralph-loop` for models with stronger agent-invocation priors:
+
+- **Sonnet / Claude** — works cleanly.
+- **GLM-4.5-Air** — untested but likely fine; agent-tuned weights.
+- **Qwen3-Coder-30B-A3B** — untested; similar capability class to gpt-oss-20b, so probably similar failure mode.
+
+For day-to-day work driven by local models in the ~3-4 B-active class, leave `ralph-loop` disabled. The other six pi-hooks extensions don't have this issue — they're all "tool wrappers" or "event hooks" rather than "subagent dispatch," which is the abstraction the smaller models struggle with.
 
 ## Skill vs. extension recap
 
