@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Wrapper around `vllm-mlx serve`. Mirrors the qwen-serve/gptoss-serve
+# pattern — activates the project venv, picks the right tool-call parser
+# for the model family, binds 127.0.0.1:8001 by default (won't collide
+# with llama-server on 8080).
+#
+# Usage:
+#   vllm-mlx-serve <model>                   # auto-pick parser from name
+#   MODEL=<hf-id> PARSER=qwen3_coder vllm-mlx-serve
+#   PORT=8003 vllm-mlx-serve <model>
+#
+# See docs/07-engines.md "MLX in Python: vllm-mlx" for setup details.
+set -euo pipefail
+
+VENV="${VENV:-$HOME/src/vllm-mlx/.venv}"
+if [[ ! -f "$VENV/bin/activate" ]]; then
+  echo "error: vllm-mlx venv not found at $VENV" >&2
+  echo "       run install/vllm-mlx.sh first" >&2
+  exit 1
+fi
+
+MODEL="${MODEL:-${1:-}}"
+if [[ -z "$MODEL" ]]; then
+  echo "Usage: vllm-mlx-serve <model> [extra-flags...]" >&2
+  echo "  e.g. vllm-mlx-serve mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit-DWQ" >&2
+  exit 1
+fi
+shift || true
+
+HOST="${HOST:-127.0.0.1}"
+PORT="${PORT:-8001}"
+
+# Auto-detect tool-call parser from model name if not provided. Falls back
+# to "auto" (vllm-mlx tries all parsers in order). Documented parsers:
+# auto/mistral/qwen/qwen3_coder/llama/hermes/harmony/gpt-oss/deepseek/
+# kimi/granite/nemotron/xlam/functionary/gemma4/glm47/minimax
+if [[ -z "${PARSER:-}" ]]; then
+  MODEL_LC="$(printf '%s' "$MODEL" | tr '[:upper:]' '[:lower:]')"
+  case "$MODEL_LC" in
+    *qwen3-coder*|*qwen3coder*|*qwen2.5-coder*) PARSER="qwen3_coder" ;;
+    *qwen3*|*qwen2*)                            PARSER="qwen" ;;
+    *gpt-oss*|*gptoss*)                         PARSER="harmony" ;;
+    *glm-4.7*|*glm4.7*|*glm-4.5*|*glm4.5*)      PARSER="glm47" ;;
+    *llama-3*|*llama3*|*llama-4*|*llama4*)      PARSER="llama" ;;
+    *deepseek*)                                 PARSER="deepseek" ;;
+    *mistral*|*devstral*)                       PARSER="mistral" ;;
+    *)                                          PARSER="auto" ;;
+  esac
+fi
+
+# shellcheck disable=SC1091
+source "$VENV/bin/activate"
+
+echo "vllm-mlx-serve: model=$MODEL  parser=$PARSER  $HOST:$PORT"
+exec vllm-mlx serve "$MODEL" \
+  --host "$HOST" --port "$PORT" \
+  --enable-auto-tool-choice \
+  --tool-call-parser "$PARSER" \
+  "$@"

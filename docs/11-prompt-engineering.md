@@ -13,6 +13,32 @@ Evidence-based tips for getting useful work out of the four local models in this
 
 The choice matters more for **agentic** prompts than for one-shot prompts. For a one-shot "explain this function," all four work. For "iterate this skill until it passes," only GLM-Air and (cloud) Sonnet handle it reliably in our testing.
 
+### Don't ignore prefill latency on big-context pi sessions
+
+For pi-shaped workloads (full agent context: system prompt + AGENTS.md + ~6 skill descriptions + ~8 extension tool registrations ≈ **4000+ tokens of context** before your prompt), the first-turn TTFT is dominated by **prefill**, not decode. Empirical numbers from this hardware (M1 Max, 4262-token system prompt):
+
+| Model | Prefill rate | First-turn TTFT in pi (cold KV cache) |
+|---|---|---|
+| Qwen3-Coder-30B-A3B (3B active) | ~620 tok/s | **~7 s** |
+| Qwen3-Coder-Next-80B (3B active) | ~410 tok/s | ~10 s |
+| gpt-oss-20b (3.6B active) | ~750 tok/s | ~6 s |
+| GLM-4.5-Air (12B active) | ~160 tok/s | **~26 s** |
+
+GLM-Air is the slowest by a wide margin — its 12 B active params vs ~3 B for the others means ~4× the bandwidth cost per token. **A pi session driven by GLM-Air will spend ~26 seconds prefilling the system prompt before the first response token streams**, on every fresh session (subsequent turns within the same session hit prefix cache and feel fast).
+
+What this means for model selection:
+
+- **Interactive pi work** → prefer Qwen3-Coder-30B (3B active, ~7s first-turn TTFT). The "agentic-tuned" advantage of GLM-Air doesn't help you when you spend 26 s staring at a blank terminal between every cold session start.
+- **Long-context single-shot** → Qwen3-Coder-Next-80B has the flattest prefill scaling and stays usable on big files.
+- **Short prompts** → gpt-oss-20b's prefill is fastest of all.
+- **GLM-Air** → useful for tool-call-quality reasons (we saw it nail iterate-on-failure loops gpt-oss-20b couldn't), but reserve it for sessions where you can pay the 26 s startup cost once and then make multiple turns. **Bad fit for "swap models frequently to try things."**
+
+Two engine-side knobs that *don't* fix this:
+- `--reasoning-parser glm4` on vllm-mlx — only affects post-prefill thinking-tokens-vs-content separation. The 4262-token prefill happens before any reasoning starts, so the TTFT bottleneck is unchanged.
+- Faster decode (vllm-mlx vs llama.cpp on GLM-Air gave ~11% decode improvement) — irrelevant when prefill dominates first-turn latency.
+
+The fix is **model choice**, not engine choice. Pick a model whose active-parameter count fits your latency budget.
+
 ## General coding-agent prompting rules
 
 These apply across all four models and align with what Mario Zechner (pi's author) recommends — pi deliberately ships a minimal system prompt and four built-in tools (`read`, `write`, `edit`, `bash`) on the theory that frontier-RL'd models already know how to be coding agents. Your prompt's job is to specify the task, not to teach the agent what an agent is.

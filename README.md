@@ -192,7 +192,7 @@ pi_sandbox/
 │   ├── gpt-oss-20b.sh             # fastest, generalist, ~12 GB
 │   ├── glm-4.5-air.sh             # largest, agent-tuned, ~55 GB
 │   ├── all-models.sh              # base + all four models in sequence
-│   └── higgs.sh                   # Rust+MLX engine alternative (no Xcode required)
+│   └── vllm-mlx.sh                # alternative engine (Python+MLX, no Xcode)
 ├── scripts/
 │   ├── qwen-serve      # start llama-server for Qwen3-Coder-30B-A3B
 │   ├── qwennext-serve  # alternate: Qwen3-Coder-Next-80B-A3B

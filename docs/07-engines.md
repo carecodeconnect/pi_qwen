@@ -216,6 +216,32 @@ Same prompt, same `max_tokens=256`, 3 runs each, no `/no_think` (Qwen3-Coder isn
 
 For pi daily use, switching `qwen3-coder-30b-a3b` from `local-llamacpp` to `local-vllm-mlx` is a ~25% decode speedup with no quality difference at the same 4-bit-class quant. Trade-off: vllm-mlx is a Python service that needs the venv activated, slightly more setup than `qwen-serve`.
 
+### GLM-4.5-Air on vllm-mlx (also working)
+
+After the Qwen success, also verified `mlx-community/GLM-4.5-Air-4bit` (~50 GB MLX) on vllm-mlx with `--tool-call-parser glm47`. `tool-call-test` passes. Required bumping the macOS wired-memory cap to 60 GB (`sudo sysctl iogpu.wired_limit_mb=61440`) — MLX is hungrier than llama.cpp Metal at this model size, and the default cap (~44 GB) or even our earlier 56 GB setting wasn't enough.
+
+| Engine | Quant | TTFT | Decode | Tool calls work? |
+|---|---|---|---|---|
+| llama.cpp | UD-Q3_K_XL GGUF (~51 GB) | — | 20.6 tok/s | ✓ |
+| vllm-mlx | 4bit MLX (~50 GB) | 1298 ms | **22.9 tok/s (+11%)** | ✓ via `--tool-call-parser glm47` |
+
+Modest speedup on GLM-Air vs the bigger wins on smaller models — consistent with bigger MoE models being memory-bandwidth-bound, where MLX's compute advantage matters less. TTFT is high (1298 ms) because MLX takes longer to set up large-model prefill. **Practical recommendation: keep `glmair-serve` (llama.cpp) for GLM-Air work** — the 11% decode win doesn't justify the wired-memory-cap operational risk (4 GB of OS headroom on a 64 GB Mac) or the extra venv setup.
+
+### Why higgs was removed from this repo
+
+The earlier higgs (Rust+MLX) section is preserved above as a record of the testing, but **higgs is no longer installed in this repo** — the `install/higgs.sh` script and `local-higgs` provider entry have been removed. higgs's parser gap on Qwen3-Coder XML and architecture gaps on `gpt_oss`/`glm4_moe` meant zero of the four production models worked end-to-end. vllm-mlx covers everything higgs would have, plus more, with the same no-Xcode property.
+
+### Summary: which engine for which model in this repo
+
+| Model | Recommended engine | Why |
+|---|---|---|
+| Qwen3-Coder-30B-A3B | `vllm-mlx-serve` | +25% decode vs llama.cpp; tool calling works |
+| Qwen3-Coder-Next-80B | llama.cpp (`qwennext-serve`) | not yet tested on vllm-mlx; same XML parser as Qwen3-Coder so likely works |
+| gpt-oss-20b | llama.cpp (`gptoss-serve`) | could try vllm-mlx with `--tool-call-parser harmony` |
+| GLM-4.5-Air | llama.cpp (`glmair-serve`) | vllm-mlx works but only +11% and needs tighter wired-memory cap |
+
+So vllm-mlx is the proven alternative engine for **Qwen3-Coder-30B specifically.** For the other three, llama.cpp remains the default — either because the engine swap is untested (Qwen3-Coder-Next, gpt-oss-20b) or because the speedup doesn't justify the operational cost (GLM-Air).
+
   Install (uses `uv` per this repo's convention — see [[feedback-use-uv-for-python]] memory, and `pyproject.toml` / `uv.lock`):
 
   ```bash
