@@ -22,26 +22,27 @@ The documented default is [Qwen3-Coder-30B-A3B-Instruct](https://huggingface.co/
 
 Measured throughput on this hardware (M1 Max, llama.cpp `b9100`, `-fa 1 -ngl 99 -r 3`):
 
-| test                | Qwen3-Coder-30B-A3B<br>(Q5_K_M, 20 GiB) | gpt-oss-20b<br>(MXFP4, 11 GiB) | GLM-4.5-Air<br>(UD-Q3_K_XL, 51 GiB) |
-| ------------------- | --------------------------------------: | -----------------------------: | ----------------------------------: |
-| pp512 (prefill)     |                          593.80 ± 4.38 |                **755.59 ± 0.90** |                       160.62 ± 1.25 |
-| pp2048              |                          554.40 ± 0.51 |                **741.53 ± 1.33** |                       150.45 ± 1.76 |
-| pp8192              |                          409.13 ± 7.86 |                **650.61 ± 7.65** |                       116.98 ± 0.47 |
-| tg128 (decode)      |                           50.76 ± 0.21 |                 **59.67 ± 0.46** |                        20.57 ± 0.08 |
-| tg512               |                           50.00 ± 0.11 |                 **60.40 ± 0.31** |                        19.82 ± 0.30 |
-| pp8192+tg128        |                          356.51 ± 2.71 |                **544.15 ± 3.87** |                       104.77 ± 1.50 |
+| test                | Qwen3-Coder-30B-A3B<br>(Q5_K_M, 20 GiB) | Qwen3-Coder-Next-80B-A3B<br>(Q3_K_M, 36 GiB) | gpt-oss-20b<br>(MXFP4, 11 GiB) | GLM-4.5-Air<br>(UD-Q3_K_XL, 51 GiB) |
+| ------------------- | --------------------------------------: | -------------------------------------------: | -----------------------------: | ----------------------------------: |
+| pp512 (prefill)     |                          593.80 ± 4.38 |                               407.39 ± 0.89 |                **755.59 ± 0.90** |                       160.62 ± 1.25 |
+| pp2048              |                          554.40 ± 0.51 |                               398.95 ± 3.05 |                **741.53 ± 1.33** |                       150.45 ± 1.76 |
+| pp8192              |                          409.13 ± 7.86 |                               381.04 ± 1.87 |                **650.61 ± 7.65** |                       116.98 ± 0.47 |
+| tg128 (decode)      |                           50.76 ± 0.21 |                                31.93 ± 0.10 |                 **59.67 ± 0.46** |                        20.57 ± 0.08 |
+| tg512               |                           50.00 ± 0.11 |                                31.94 ± 0.26 |                 **60.40 ± 0.31** |                        19.82 ± 0.30 |
+| pp8192+tg128        |                          356.51 ± 2.71 |                               323.00 ± 2.03 |                **544.15 ± 3.87** |                       104.77 ± 1.50 |
 
-gpt-oss-20b is **~1.2–1.6× faster than Qwen** across the board; the gap widens at long contexts because gpt-oss has fewer total parameters (21 B vs 30 B) despite both being MoE. GLM-4.5-Air decodes **~2.5× slower than Qwen** and **~3× slower than gpt-oss** — expected given 12 B active params (4× Qwen's) and the model running near the wired-memory ceiling. Prefill is ~3.5–5× slower, large enough to feel in long-context agent turns. See [Benchmarking](#benchmarking) for the raw `llama-bench` output and how to reproduce.
+gpt-oss-20b is **~1.2–1.6× faster than Qwen-30B** across the board; the gap widens at long contexts because gpt-oss has fewer total parameters (21 B vs 30 B). **Qwen3-Coder-Next-80B-A3B is the long-context standout**: at pp8192 it nearly ties Qwen-30B (381 vs 409 — only 7% behind) and at the agent-realistic pp8192+tg128 it's within 10% (323 vs 357). The 30B's prefill drops 31% as context grows (594→409); Next's only drops 6% (407→381). Decode is ~37% slower than 30B but **1.6× faster than GLM-4.5-Air** despite being larger — same 3 B active params, and active params dominate the decode budget. GLM-4.5-Air decodes ~2.5× slower than Qwen-30B (12 B active = 4× Qwen's) and runs near the wired-memory ceiling on this hardware. See [Benchmarking](#benchmarking) for raw output and how to reproduce.
 
 Should work on any Apple Silicon Mac with ≥ 32 GB RAM. Bigger context windows or higher-bit quants need more.
 
 ### Model comparison
 
-Three candidates work end-to-end with pi on this hardware:
+Four candidates work end-to-end with pi on this hardware:
 
 - **Qwen3-Coder-30B-A3B-Instruct** (MoE, ~3 B active of 30 B, Q5_K_M, ~20 GiB) — **current default**. Coder-tuned weights, strong tool-call coherence, balanced speed and quality on real coding tasks. Upstream benchmarks: [Qwen3-Coder blog](https://qwenlm.github.io/blog/qwen3-coder/).
-- **gpt-oss-20b** (MoE, ~3.6 B active of 21 B, MXFP4, ~11 GiB) — **competitive**. Clean tool calls, ~1.2–1.6× faster than Qwen on the same prompt sweep (see [Tested on](#tested-on)). Generalist-reasoning-tuned rather than coder-specialized; survey and Q&A feel just as good, dense codegen quality has not been fully evaluated. Upstream benchmarks: [OpenAI gpt-oss announcement](https://openai.com/index/introducing-gpt-oss/).
-- **GLM-4.5-Air** (MoE, ~12 B active of 106 B, Unsloth UD-Q3_K_XL, ~51 GiB) — **marginal but works.** Agent-tuned, clean tool calls, decode ~20 tok/s (~2.5× slower than Qwen — see [Tested on](#tested-on)). Needs a Metal wired-memory cap bump (see [troubleshooting](#kiogpucommandbuffercallbackerroroutofmemory-during-inference)). Upstream benchmarks: [Z.ai GLM-4.5 blog](https://z.ai/blog/glm-4.5).
+- **Qwen3-Coder-Next-80B-A3B-Instruct** (MoE, **3 B active** of 80 B, Q3_K_M, ~36 GiB) — **long-context winner.** Same 3 B active params as the 30B default, scaled total capacity. Decode is ~37% slower (32 vs 51 tok/s) but prefill is nearly flat with context (only 6% drop from pp512→pp8192 vs 30B's 31%) — at long contexts it nearly catches the 30B. See [`qwennext-serve`](#qwennext-serve-alternate-model). Upstream benchmarks: [Qwen3-Coder blog](https://qwenlm.github.io/blog/qwen3-coder/).
+- **gpt-oss-20b** (MoE, ~3.6 B active of 21 B, MXFP4, ~11 GiB) — **fastest**. Clean tool calls, ~1.2–1.6× faster than Qwen-30B on the same prompt sweep (see [Tested on](#tested-on)). Generalist-reasoning-tuned rather than coder-specialized; survey and Q&A feel just as good, dense codegen quality has not been fully evaluated. Upstream benchmarks: [OpenAI gpt-oss announcement](https://openai.com/index/introducing-gpt-oss/).
+- **GLM-4.5-Air** (MoE, ~12 B active of 106 B, Unsloth UD-Q3_K_XL, ~51 GiB) — **marginal but works.** Agent-tuned, clean tool calls, decode ~20 tok/s (~2.5× slower than Qwen-30B — see [Tested on](#tested-on)). Needs a Metal wired-memory cap bump (see [troubleshooting](#kiogpucommandbuffercallbackerroroutofmemory-during-inference)). Upstream benchmarks: [Z.ai GLM-4.5 blog](https://z.ai/blog/glm-4.5).
 
 ### Tested and rejected
 
@@ -61,7 +62,7 @@ Documenting what didn't work so the same paths don't get retried. Both kept this
 
 Candidates queued for testing on this same 64 GB M1 Max. All MoE (dense ≥24 B is ruled out by the Devstral result above) and known to have working structured tool calling in current llama.cpp.
 
-- **[Qwen3-Coder-Next-80B-A3B-Instruct](https://huggingface.co/unsloth/Qwen3-Coder-Next-GGUF)** (MoE, **3 B active** of 80 B, **Q3_K_M, 38 GB**) — **in progress.** Scaled-up sibling of the Qwen3-Coder-30B default; same 3 B active params, same coder-tuning, same template trick. Wired up via [`qwennext-serve`](#qwennext-serve-alternate-model). Quant picked to land under the default 44 GB Metal cap so no `sysctl` prereq is needed (cleaner than GLM-Air's path). Note: Unsloth doesn't ship a `UD-Q3_K_XL` for this model — vanilla `Q3_K_M` was the closest in-budget option. Upstream benchmarks: [Qwen3-Coder blog](https://qwenlm.github.io/blog/qwen3-coder/).
+- **[Qwen3-Coder-Next-80B-A3B-Instruct](https://huggingface.co/unsloth/Qwen3-Coder-Next-GGUF)** (MoE, **3 B active** of 80 B, **Q3_K_M, 36 GiB**) — **tested, long-context winner.** Scaled-up sibling of the Qwen3-Coder-30B default; same 3 B active params, same coder-tuning, same template trick. Wired up via [`qwennext-serve`](#qwennext-serve-alternate-model). Quant picked to land under the default 44 GB Metal cap so no `sysctl` prereq is needed. Decode is ~37% slower than 30B (32 vs 51 tok/s) but **prefill barely degrades with context** — at pp8192 it's within 7% of 30B (381 vs 409). For agent turns that fill context with codebase reads, this is the model. Upstream benchmarks: [Qwen3-Coder blog](https://qwenlm.github.io/blog/qwen3-coder/).
 - **[gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b)** (MoE, ~5.1 B active of 117 B, MXFP4 native, ~63 GB) — **cleanest scale-up of the gpt-oss-20b favorite.** Same chat template, same `--jinja`-only wiring, same sampler recipe. The catch: 63 GB weights on a 64 GB Mac leave ~1 GB headroom — forces `CTX` to 16–32 K and minimal background apps. Similar tightness to vanilla `Q3_K_M` GLM, which is why GLM dropped to UD-Q3_K_XL. Upstream benchmarks: [OpenAI gpt-oss announcement](https://openai.com/index/introducing-gpt-oss/).
 - **[Llama 4 Scout](https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E-Instruct)** (MoE, **17 B active** of 109 B, UD-Q3/Q4, ~50–60 GB) — **expected to underperform Qwen-Coder-Next.** 17 B active is much higher than ideal for Apple Silicon's bandwidth ceiling; decode will be slower than the 3 B-active alternatives despite a similar total-parameter count. Not agent-tuned the way GLM-Air is. Worth testing only to confirm the bandwidth-vs-active-params hypothesis empirically.
 
@@ -545,6 +546,18 @@ Real runs on Apple M1 Max, 64 GB, llama.cpp build `2e97c5f96 (9100)`:
 | qwen3moe 30B.A3B Q5_K - Medium | 20.23 GiB | 30.53 B | BLAS,MTL |       8 |  1 |  pp8192+tg128 |   356.51 ± 2.71 |
 ```
 
+**Qwen3-Coder-Next-80B-A3B-Instruct (Q3_K_M, 35.69 GiB, 79.67 B params, 3 B active)**
+```
+| model                          |      size |  params | backend  | threads | fa |          test |             t/s |
+| ------------------------------ | --------: | ------: | -------- | ------: | -: | ------------: | --------------: |
+| qwen3next 80B.A3B Q3_K - Medium| 35.69 GiB | 79.67 B | BLAS,MTL |       8 |  1 |         pp512 |   407.39 ± 0.89 |
+| qwen3next 80B.A3B Q3_K - Medium| 35.69 GiB | 79.67 B | BLAS,MTL |       8 |  1 |        pp2048 |   398.95 ± 3.05 |
+| qwen3next 80B.A3B Q3_K - Medium| 35.69 GiB | 79.67 B | BLAS,MTL |       8 |  1 |        pp8192 |   381.04 ± 1.87 |
+| qwen3next 80B.A3B Q3_K - Medium| 35.69 GiB | 79.67 B | BLAS,MTL |       8 |  1 |         tg128 |    31.93 ± 0.10 |
+| qwen3next 80B.A3B Q3_K - Medium| 35.69 GiB | 79.67 B | BLAS,MTL |       8 |  1 |         tg512 |    31.94 ± 0.26 |
+| qwen3next 80B.A3B Q3_K - Medium| 35.69 GiB | 79.67 B | BLAS,MTL |       8 |  1 |  pp8192+tg128 |   323.00 ± 2.03 |
+```
+
 **gpt-oss-20b (MXFP4, 11.27 GiB, 20.91 B params, ~3.6 B active)**
 ```
 | model                 |      size |  params | backend  | threads | fa |          test |             t/s |
@@ -570,10 +583,12 @@ Real runs on Apple M1 Max, 64 GB, llama.cpp build `2e97c5f96 (9100)`:
 ```
 
 Reading the numbers:
-- **Prefill scaling.** All three models slow down with longer prompts (Qwen 594→409, gpt-oss 756→651, GLM 161→117 from pp512 to pp8192). The drop is gentler on gpt-oss — fewer total parameters means less compute per token at prefill time.
+- **Prefill scaling.** All four models slow down with longer prompts, but at different rates. From pp512→pp8192: Qwen-30B drops 31% (594→409), gpt-oss drops 14% (756→651), GLM drops 27% (161→117), **Qwen-Next drops only 6%** (407→381). The gentle Qwen-Next curve is the standout — at long contexts it nearly matches Qwen-30B's prefill despite starting much slower.
 - **Decode is steady within a model** (`tg128` ≈ `tg512`). It's bandwidth-bound, not compute-bound, so generation length barely matters.
-- **gpt-oss is ~1.2–1.6× faster than Qwen across the sweep**, with the gap widest at `pp8192+tg128` — the agent-realistic combined run.
-- **GLM-4.5-Air is ~3–4× slower than Qwen and ~5–6× slower than gpt-oss.** Two effects compound: 12 B active params (4× Qwen's 3 B) means more compute per token, and the 51 GiB weights run right against the 56 GB Metal wired-memory cap, so any page miss is expensive. The architectural prediction (decode slowdown ≈ active-param ratio) holds: 50.8 / 20.6 ≈ 2.5×, matched closely. Coding-agent usable at ~20 tok/s decode, but you feel the long-context prefill.
+- **gpt-oss is ~1.2–1.6× faster than Qwen-30B across the sweep**, with the gap widest at `pp8192+tg128` — the agent-realistic combined run.
+- **Qwen-Next vs Qwen-30B is a long-context trade.** Short-prompt prefill is ~30% slower (407 vs 594) and decode is ~37% slower (31.9 vs 50.8), but the long-context numbers converge: at `pp8192` they're within 7% (381 vs 409), and `pp8192+tg128` is within 10% (323 vs 357). Both have 3 B active params, so the decode delta is bandwidth-dominated by the larger total weight footprint (35.69 GiB vs 20.23 GiB).
+- **GLM-4.5-Air is ~3–4× slower than Qwen-30B and ~5–6× slower than gpt-oss.** Two effects compound: 12 B active params (4× Qwen's 3 B) means more compute per token, and the 51 GiB weights run right against the 56 GB Metal wired-memory cap, so any page miss is expensive. The architectural prediction (decode slowdown ≈ active-param ratio) holds: 50.8 / 20.6 ≈ 2.5×, matched closely. Coding-agent usable at ~20 tok/s decode, but you feel the long-context prefill.
+- **Active params dominate decode.** Qwen-Next (3 B active, 80 B total) decodes at 31.9 tok/s; GLM (12 B active, 106 B total) decodes at 20.6. Despite a larger total footprint, Qwen-Next is faster — confirming the rule we've been operating by since Devstral.
 - **MoE throughput moves with quant, batch size, context length, and what else is on the GPU.** Reproduce all runs on your own hardware before reading too much into the deltas.
 
 Overrides for the wrapper:
