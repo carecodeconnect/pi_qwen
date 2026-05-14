@@ -7,6 +7,23 @@ description: Commit, push, open pull requests, and manage GitHub issues (create,
 
 Procedures for committing, pushing, opening pull requests, and managing issues in this repo. Uses pi's built-in `bash` tool — no new tools needed.
 
+## How to use this skill
+
+**This document is instructions you execute by running `bash` tool calls.** It is not a function to invoke. There is no separate skill-invocation API. Do not search the filesystem for an entry point. Do not look for a CLI wrapper. The procedures below *are* the entry point.
+
+How to use it:
+
+1. Read the user's request and pick the matching procedure:
+   - "commit", "stage", "push" → **Procedure A**
+   - "open a PR", "create a pull request", "what's on this branch" → **Procedure B**
+   - "create / file / open an issue", "list issues", "comment on issue", "close issue" → **Procedure C**
+   - If unclear, ask the user which.
+2. Run the bash commands inside that procedure, in order, via the `bash` tool. Substitute concrete values (filenames, issue numbers, message bodies) inline.
+3. Return the relevant output (commit SHA, PR URL, issue URL) to the user verbatim — don't paraphrase.
+4. Honor the Safety rules at every step.
+
+That's it. The skill is procedural guidance, not a black box.
+
 ## Safety rules (always)
 
 1. **Never commit unless the user explicitly asked.** Reviewing a diff, writing code, or staging are fine without explicit ask. Creating a commit is not.
