@@ -34,8 +34,8 @@ PORT="${PORT:-8001}"
 # to "auto" (vllm-mlx tries all parsers in order). Documented parsers:
 # auto/mistral/qwen/qwen3_coder/llama/hermes/harmony/gpt-oss/deepseek/
 # kimi/granite/nemotron/xlam/functionary/gemma4/glm47/minimax
+MODEL_LC="$(printf '%s' "$MODEL" | tr '[:upper:]' '[:lower:]')"
 if [[ -z "${PARSER:-}" ]]; then
-  MODEL_LC="$(printf '%s' "$MODEL" | tr '[:upper:]' '[:lower:]')"
   case "$MODEL_LC" in
     *qwen3-coder*|*qwen3coder*|*qwen2.5-coder*) PARSER="qwen3_coder" ;;
     *qwen3*|*qwen2*)                            PARSER="qwen" ;;
@@ -48,12 +48,27 @@ if [[ -z "${PARSER:-}" ]]; then
   esac
 fi
 
+# Auto-pick reasoning parser too (only set if user didn't pass --reasoning-parser
+# explicitly, which would be in "$@"). Valid: qwen3/deepseek_r1/gpt_oss/harmony/
+# gemma4/glm4.
+REASONING_ARGS=()
+if [[ "$*" != *--reasoning-parser* ]]; then
+  case "$MODEL_LC" in
+    *gpt-oss*|*gptoss*)                  REASONING_ARGS=(--reasoning-parser gpt_oss) ;;
+    *glm-4.7*|*glm4.7*|*glm-4.5*|*glm4.5*) REASONING_ARGS=(--reasoning-parser glm4) ;;
+    *qwen3*)                             REASONING_ARGS=(--reasoning-parser qwen3) ;;
+    *deepseek-r1*|*deepseekr1*)          REASONING_ARGS=(--reasoning-parser deepseek_r1) ;;
+    *gemma-4*|*gemma4*)                  REASONING_ARGS=(--reasoning-parser gemma4) ;;
+  esac
+fi
+
 # shellcheck disable=SC1091
 source "$VENV/bin/activate"
 
-echo "vllm-mlx-serve: model=$MODEL  parser=$PARSER  $HOST:$PORT"
+echo "vllm-mlx-serve: model=$MODEL  tool=$PARSER  reasoning=${REASONING_ARGS[1]:-none}  $HOST:$PORT"
 exec vllm-mlx serve "$MODEL" \
   --host "$HOST" --port "$PORT" \
   --enable-auto-tool-choice \
   --tool-call-parser "$PARSER" \
+  "${REASONING_ARGS[@]}" \
   "$@"

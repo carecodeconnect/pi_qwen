@@ -233,14 +233,26 @@ The earlier higgs (Rust+MLX) section is preserved above as a record of the testi
 
 ### Summary: which engine for which model in this repo
 
-| Model | Recommended engine | Why |
-|---|---|---|
-| Qwen3-Coder-30B-A3B | `vllm-mlx-serve` | +25% decode vs llama.cpp; tool calling works |
-| Qwen3-Coder-Next-80B | llama.cpp (`qwennext-serve`) | not yet tested on vllm-mlx; same XML parser as Qwen3-Coder so likely works |
-| gpt-oss-20b | llama.cpp (`gptoss-serve`) | could try vllm-mlx with `--tool-call-parser harmony` |
-| GLM-4.5-Air | llama.cpp (`glmair-serve`) | vllm-mlx works but only +11% and needs tighter wired-memory cap |
+Three of the four production models now have working vllm-mlx paths (verified end-to-end on this hardware, 2026-05-14):
 
-So vllm-mlx is the proven alternative engine for **Qwen3-Coder-30B specifically.** For the other three, llama.cpp remains the default — either because the engine swap is untested (Qwen3-Coder-Next, gpt-oss-20b) or because the speedup doesn't justify the operational cost (GLM-Air).
+| Model | vllm-mlx status | Recommended engine | Why |
+|---|---|---|---|
+| Qwen3-Coder-30B-A3B | ✓ verified | `vllm-mlx-serve` | +25% decode vs llama.cpp; ~7 s first-turn TTFT in pi |
+| gpt-oss-20b | ✓ verified | `vllm-mlx-serve` | ~6 s TTFT (fastest of the set); Harmony tool + reasoning parsers wired in |
+| GLM-4.5-Air | ✓ verified | llama.cpp (`glmair-serve`) | vllm-mlx works but only +11% decode AND has 26 s prefill cost — see [prefill latency note](./11-prompt-engineering.md#dont-ignore-prefill-latency-on-big-context-pi-sessions) |
+| Qwen3-Coder-Next-80B | not yet tested | llama.cpp (`qwennext-serve`) | same XML tool-call format as Qwen3-Coder-30B; likely works on vllm-mlx but unverified |
+
+**For everyday pi work**, the highest-value swap is **Qwen3-Coder-30B → vllm-mlx** (real ~25% decode speedup, fast TTFT). gpt-oss-20b is even faster but generalist-tuned; pick Qwen3-Coder when you need code-specific quality and gpt-oss-20b for survey/Q&A or quick edits. GLM-Air's vllm-mlx path works but the prefill cost makes it impractical for interactive sessions — keep llama.cpp's `glmair-serve` for that one.
+
+The `~/bin/vllm-mlx-serve` wrapper auto-picks both the tool-call parser and reasoning parser from the model name pattern:
+
+- `Qwen3-Coder-*` → `--tool-call-parser qwen3_coder --reasoning-parser qwen3`
+- `gpt-oss-*` → `--tool-call-parser harmony --reasoning-parser gpt_oss`
+- `GLM-4.5-*` / `GLM-4.7-*` → `--tool-call-parser glm47 --reasoning-parser glm4`
+- `Qwen3-*` (non-coder) → `--tool-call-parser qwen --reasoning-parser qwen3`
+- Other Llama-3+, Mistral, DeepSeek, Gemma-4 also covered
+
+so just `~/bin/vllm-mlx-serve <hf-id>` does the right thing across these four model families.
 
   Install (uses `uv` per this repo's convention — see [[feedback-use-uv-for-python]] memory, and `pyproject.toml` / `uv.lock`):
 
