@@ -60,6 +60,9 @@ Wire into pi the same way as any other engine: add a provider entry in `~/.pi/ag
 | MLX model | tool-call-test | Notes |
 |---|---|---|
 | `mlx-community/Qwen3-1.7B-4bit` | ✓ PASS | Structured `tool_calls` returned cleanly for `get_weather`. Verified end-to-end with this exact command: `PORT=8002 ALIAS=qwen3-1.7b tool-call-test`. |
+| `mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit` | _pending download_ | MLX equivalent of the repo's default llama.cpp model. Same architecture family as Qwen3-1.7B, so high prior on tool calling working. |
+| `mlx-community/gpt-oss-20b-MXFP4-Q4` | _pending download_ | MLX equivalent of `local-gpt-oss-20b`. Uses OpenAI's Harmony format — higgs needs to render Harmony correctly for tool calls to fire. |
+| `mlx-community/GLM-4.5-Air-4bit` | _pending download_ | MLX equivalent of `local-glm-4.5-air`. GLM has its own chat template format; verifying higgs handles it. |
 | `mlx-community/Llama-3.2-1B-Instruct-4bit` | ✗ FAIL | Jinja template error: `too many arguments (in chat:61)`. Not a higgs bug — Meta's Llama-3.2 1B doesn't ship a tool-call-aware chat template (tool support starts at 3B+). Same failure shape as the DeepSeek-Coder-V2-Lite rejection in [`docs/02-models.md`](./02-models.md#tested-and-rejected). |
 
 Rule of thumb: on higgs, **pick MLX models with documented tool-call training** (Qwen3 family, Qwen2.5-Coder, Llama-3.2-3B+, GLM-4.5-Air, gpt-oss). Skip 1B-class instruct models — they predate the structured-tool-call norm at that size.
