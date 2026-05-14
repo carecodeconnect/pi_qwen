@@ -50,6 +50,94 @@ Should work on any Apple Silicon Mac with ≥ 32 GB RAM. Bigger context windows 
 
 pi sees an OpenAI-compatible endpoint. llama-server does the actual inference on Metal. Your model file sits on disk and is memory-mapped at load time.
 
+### Workflow
+
+The full lifecycle — system setup → model install → daily use → model switching — looks like this. Diagram authored by **GLM-4.5-Air running locally in pi**, using the project's `mermaid` skill (`format.sh` + `validate.sh` iterate loop) — see [docs/codebase-workflow.mmd](docs/codebase-workflow.mmd) for the source.
+
+```mermaid
+flowchart TD
+    A[Start: System Setup] --> B[Install Prerequisites]
+    B --> C[Install llama.cpp via Homebrew]
+    B --> D[Install pi via curl]
+    B --> E[Install uv via curl]
+
+    C --> F[Clone Repository]
+    D --> F
+    E --> F
+
+    F --> G[Run uv sync]
+    G --> H[Base Install: ./install/base.sh]
+    H --> I[Copy helper scripts to ~/bin]
+    H --> J[Copy pi provider config to ~/.pi/agent/]
+
+    I --> K[Choose Model & Install]
+    J --> K
+
+    K --> L{Model Selection}
+    L --> M[Qwen3-Coder-30B<br>./install/qwen3-coder-30b.sh]
+    L --> N[Qwen3-Coder-Next-80B<br>./install/qwen3-coder-next-80b.sh]
+    L --> O[GPT-OSS-20B<br>./install/gpt-oss-20b.sh]
+    L --> P[GLM-4.5-Air<br>./install/glm-4.5-air.sh]
+
+    M --> QWEN30B_DOWNLOAD["Download Model (~21 GB)"]
+    N --> QWENNEXT_DOWNLOAD["Download Model (~38 GB)"]
+    O --> GPTOSS_DOWNLOAD["Download Model (~12 GB)"]
+    P --> GLMAIR_DOWNLOAD["Download Model (~55 GB)"]
+
+    QWEN30B_DOWNLOAD --> U[Daily Use Workflow]
+    QWENNEXT_DOWNLOAD --> U
+    GPTOSS_DOWNLOAD --> U
+    GLMAIR_DOWNLOAD --> U
+
+    U --> V[Terminal 1: Start Server]
+    U --> W[Terminal 2: Test & Run pi]
+
+    V --> X{Choose Server Script}
+    X --> Y[qwen-serve<br>Qwen3-Coder-30B-A3B]
+    X --> Z[qwennext-serve<br>Qwen3-Coder-Next-80B-A3B]
+    X --> AA[gptoss-serve<br>GPT-OSS-20B]
+    X --> AB[glmair-serve<br>GLM-4.5-Air]
+
+    Y --> AC[llama-server with Qwen flags]
+    Z --> AD[llama-server with Next flags]
+    AA --> AE[llama-server with GPT-OSS flags]
+    AB --> AF[llama-server with GLM flags]
+
+    AC --> AG[Server running on port 8080]
+    AD --> AG
+    AE --> AG
+    AF --> AG
+
+    W --> AH[Smoke Test: qwen-test]
+    W --> AI[Tool Call Test: tool-call-test]
+    W --> AJ[Run pi: pi --model <alias>]
+
+    AH --> AK[Reply with hello]
+    AI --> AL[Verify structured tool_calls]
+    AJ --> AM[Interactive pi session]
+
+    AK --> AN[✓ Server working]
+    AL --> AN
+    AN --> AM
+
+    AM --> AO[Code with pi<br>Exit with /exit or Ctrl-D]
+
+    AO --> AP{Switch Models?}
+    AP --> |Yes| AQ[Terminal 1: serve-stop]
+    AP -->|No| AR[Continue using current model]
+
+    AQ --> AS[Free port 8080]
+    AS --> AT[Choose different server script]
+    AT --> X
+
+    AR --> AU[Daily workflow complete]
+
+    style A fill:#e1f5fe
+    style U fill:#f3e5f5
+    style X fill:#fff3e0
+    style AP fill:#e8f5e8
+```
+
 ## Daily use
 
 Two commands in two terminals:
@@ -143,4 +231,4 @@ MIT — see [LICENSE](LICENSE).
 
 ## Acknowledgments
 
-This README was co-written by Claude Code and the Qwen3-Coder-30B-A3B model with Pi.
+This README was co-written by Claude Code and the Qwen3-Coder-30B-A3B model with Pi. The workflow diagram above was authored by **GLM-4.5-Air running locally in pi** via the project's `mermaid` skill — first-pass attempts on smaller models (gpt-oss-20b) failed the iterate-on-validator-feedback loop; GLM-Air converged with one steering message. See [docs/11-prompt-engineering.md](docs/11-prompt-engineering.md) for the model-vs-task fit table this empirically supports.
