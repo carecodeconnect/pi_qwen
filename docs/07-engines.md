@@ -30,11 +30,42 @@ Neither is the default path yet — each is here as a candidate to benchmark aga
 
 Both build with `cargo install` and the same Xcode/Metal requirement as mistral.rs. To wire either into pi, point a new entry in `~/.pi/agent/models.json` at the engine's port and use whatever id it advertises at `/v1/models`.
 
-## MLX (not Rust, but the no-Xcode path)
+## Rust + MLX: `higgs` (the no-Xcode Rust path)
+
+If the Rust-engine question is really *"is there a Rust inference engine I can actually install on this Mac without Xcode or an Apple ID,"* the answer is yes: [panbanda/higgs](https://github.com/panbanda/higgs).
+
+Higgs is a single static Rust binary that uses MLX as its inference backend and exposes both OpenAI (`/v1/chat/completions`, `/v1/completions`) and Anthropic (`/v1/messages`) HTTP APIs. Because it's distributed via Homebrew with a pre-built `aarch64-apple-darwin` binary, **no compilation happens on your machine** — same friction profile as llama.cpp in this repo.
+
+Install:
+
+```bash
+brew install panbanda/brews/higgs
+```
+
+That's it. No Rust toolchain, no Xcode (not even CLT), no Apple ID. If you'd rather build from source, the requirement is only **Rust 1.88+ and Xcode CLI Tools** (`xcode-select --install`) — still no full Xcode, still no Apple ID.
+
+Supported model families: Qwen, Llama, Mistral, Gemma, Phi, DeepSeek, and vision-capable MLX variants. Documentation lists specific versions like Qwen3-1.7B, Llama-3.2-1B, DeepSeek-V2-Lite.
+
+Launch the server (use **port 8002** to avoid colliding with llama-server on 8080 and vllm-mlx on 8001):
+
+```bash
+higgs serve --port 8002
+# Then send requests to http://127.0.0.1:8002/v1/chat/completions
+```
+
+Wire into pi the same way as any other engine: add a provider entry in `~/.pi/agent/models.json` and gate with `tool-call-test`. **Caveat:** the higgs README doesn't explicitly document tool-call format support — verify with `tool-call-test` before trusting the integration. If tool calls fail, that's a known risk with newer engines and may need waiting on upstream.
+
+Underneath higgs, the binding layer is **[oxideai/mlx-rs](https://github.com/oxideai/mlx-rs)** (unofficial Rust bindings to MLX's C++ framework). Relevant if you want to write your own inference server in Rust against MLX — but `mlx-rs` requires building from source with CLT, which is still the no-Apple-ID path but more setup than `brew install higgs`.
+
+**Practical recommendation:** if your goal is "try a Rust inference engine on this hardware with no Xcode friction," start with `higgs`. It's the cleanest match. If higgs's tool-calling turns out to be unreliable or it's missing your model family, fall back to vllm-mlx (next section) — different language (Python) but more mature MLX integration.
+
+## MLX in Python: `vllm-mlx` (more mature, no Xcode required)
 
 - **[vllm-mlx](https://github.com/waybarrios/vllm-mlx)** — MLX backend with an OpenAI + Anthropic-compatible HTTP server, baked-in MCP tool calling (12 parsers including OpenAI, Anthropic, Gemini, Qwen, DeepSeek, Gemma), continuous batching, and vision/audio support. Reports 400+ tok/s on M-series for small models and 10–30% faster than llama.cpp Metal on 70B+ models.
 
-  **Why this matters here:** MLX is Apple's own ML framework, distributed as pre-built Python wheels with the Metal shaders already compiled. **No Xcode and no Apple ID required to install.** That makes vllm-mlx the only practical alternate-engine path on this hardware if mistral.rs / Crane / candle-vllm are blocked by the Xcode requirement.
+  **When to pick this over `higgs`:** vllm-mlx is more mature than higgs and has explicit MCP tool-call parsers, which higgs's README doesn't document. If you've tried higgs and tool-calling won't fire, or you need a model family higgs doesn't support, vllm-mlx is the fallback. Trade-off: it's Python (not Rust) and requires a Python environment.
+
+  Same no-Xcode property as higgs — MLX is Apple's own ML framework, distributed as pre-built Python wheels with the Metal shaders already compiled. **No full Xcode and no Apple ID required to install.**
 
   Install (uses `uv` per this repo's convention — see [[feedback-use-uv-for-python]] memory, and `pyproject.toml` / `uv.lock`):
 
