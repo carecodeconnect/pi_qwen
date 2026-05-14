@@ -37,7 +37,6 @@ if [[ -z "${PARSER:-}" ]]; then
   case "$MODEL_LC" in
     *qwen3-coder*|*qwen3coder*|*qwen2.5-coder*) PARSER="qwen3_coder" ;;
     *qwen3-xml*|*qwen3xml*)                     PARSER="qwen3_xml" ;;
-    *qwen3-next*|*qwen3next*|*qwen3*instruct*)  PARSER="hermes" ;;
     *gpt-oss*|*gptoss*)                         PARSER="openai" ;;
     *glm-4.7*|*glm4.7*)                         PARSER="glm47" ;;
     *glm-4.5*|*glm4.5*)                         PARSER="glm45" ;;
