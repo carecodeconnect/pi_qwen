@@ -1,11 +1,11 @@
 ---
 name: git-github
-description: Commit, push, and create GitHub pull requests for this repo. Use when the user asks to commit changes, push to a branch, open a PR, or describe what's changed on the current branch. Encodes this repo's commit-message style (terse present-tense, no conventional-commit prefixes), safe staging (no `git add -A`/`git add .`), secret detection before commit, and the `gh pr create` HEREDOC pattern for PR bodies. Includes a safety preflight — never force-push to main, never `--no-verify`, never commit without explicit user ask.
+description: Commit, push, open pull requests, and manage GitHub issues (create, list, view, comment, close) for this repo. Use when the user asks to commit changes, push to a branch, open a PR, describe what's changed on the current branch, file a bug or feature request, triage issues, or comment on an issue. Encodes this repo's commit-message style (terse present-tense, no conventional-commit prefixes), safe staging (no `git add -A`/`git add .`), secret detection before commit, the `gh pr create` HEREDOC pattern for PR bodies, and a parallel pattern for `gh issue create`. Includes a safety preflight — never force-push to main, never `--no-verify`, never commit without explicit user ask, never close someone else's issue without confirmation.
 ---
 
 # Git + GitHub workflow
 
-Procedures for committing, pushing, and opening pull requests in this repo. Uses pi's built-in `bash` tool — no new tools needed.
+Procedures for committing, pushing, opening pull requests, and managing issues in this repo. Uses pi's built-in `bash` tool — no new tools needed.
 
 ## Safety rules (always)
 
@@ -15,6 +15,7 @@ Procedures for committing, pushing, and opening pull requests in this repo. Uses
 4. **Never force-push to `main`/`master`.** Warn the user if they ask. For feature branches, only force-push if the user explicitly asks.
 5. **Never amend a commit that has been pushed** unless the user explicitly asks. Prefer a new commit.
 6. **Never `git reset --hard`, `git checkout .`, `git clean -f`, or `git branch -D`** without explicit ask — these are destructive and silently throw away work.
+7. **Never close, reopen, edit, or delete an issue you didn't open** without explicit user confirmation. Reading and commenting are fine.
 
 ## Procedure A: commit + push
 
@@ -153,12 +154,128 @@ EOF
 
 Return the PR URL to the user when done.
 
+## Procedure C: GitHub issues
+
+Use `gh issue` for all issue operations — `gh` handles auth, formatting, and URL construction. Don't hand-roll API calls unless you need something `gh` doesn't expose.
+
+### Create an issue
+
+1. **Survey first.** Check whether a similar issue already exists so you don't duplicate:
+
+   ```bash
+   gh issue list --search "<keywords from user's request>"
+   ```
+
+2. **Draft title + body** in the same style as commits/PRs:
+   - **Title**: imperative present tense, under ~70 chars. No conventional-commit prefixes. Examples: `qwennext-serve hangs on first request when CTX > 65536`, `Add bench/throughput.sh wrapper for mistral.rs`, `Document Metal wired-memory cap in install/glm-4.5-air.sh`.
+   - **Body** (markdown): structure depends on issue type.
+
+   **For bugs:**
+   ```markdown
+   ## What happened
+   <one-paragraph description>
+
+   ## Repro
+   1. Step
+   2. Step
+   3. Step
+
+   ## Expected
+   <what should have happened>
+
+   ## Environment
+   - pi version (`pi --version`)
+   - llama.cpp version (`llama-server --version` or Homebrew tag)
+   - Model + quant
+   - macOS version, Mac model, RAM
+   ```
+
+   **For features / enhancements:**
+   ```markdown
+   ## Problem
+   <what's annoying or impossible today>
+
+   ## Proposed
+   <one-paragraph sketch>
+
+   ## Alternatives considered
+   <optional — what else you thought about>
+   ```
+
+3. **Create the issue** with a HEREDOC for the body:
+
+   ```bash
+   gh issue create --title "issue title here" --body "$(cat <<'EOF'
+   ## What happened
+   <body markdown here>
+   EOF
+   )"
+   ```
+
+   Optional flags:
+   - `--label "bug,documentation"` — comma-separated labels (must already exist on the repo).
+   - `--assignee @me` — assign yourself.
+   - `--milestone "<name>"`.
+
+4. **Return the URL** that `gh` prints. Don't paraphrase it — paste the exact URL.
+
+### List / view / search issues
+
+```bash
+gh issue list                          # open issues
+gh issue list --state closed           # closed
+gh issue list --search "metal wired"   # full-text search title + body
+gh issue list --label bug              # filter by label
+gh issue view <num>                    # full issue + comments
+gh issue view <num> --comments         # explicit comment dump
+gh issue view <num> --json title,body,state,labels  # machine-readable
+```
+
+### Comment on an issue
+
+```bash
+gh issue comment <num> --body "$(cat <<'EOF'
+Comment body in markdown.
+
+- Bullet
+- Bullet
+EOF
+)"
+```
+
+If the comment is a one-liner, just use `--body "short message"` without the HEREDOC.
+
+### Close / reopen an issue
+
+**Safety:** never close or reopen an issue the user didn't open without explicit confirmation. For issues the user did open, default to asking before closing — the user may want to leave a closing comment first.
+
+```bash
+gh issue close <num>                          # plain close
+gh issue close <num> --comment "Fixed in <commit-sha>"   # close with closing comment
+gh issue reopen <num>
+```
+
+### Link an issue from a PR
+
+Add `Closes #N` (or `Fixes #N`, `Resolves #N`) to the PR body. GitHub auto-closes the issue when the PR merges:
+
+```markdown
+## Summary
+- Bullet describing the fix
+
+Closes #1
+
+## Test plan
+- [ ] Step 1
+```
+
 ## Other useful operations
 
 - View PR comments: `gh api repos/<owner>/<repo>/pulls/<num>/comments`
 - View CI status: `gh pr checks`
 - View a PR: `gh pr view <num>`
 - Compare branches: `git log main..HEAD --stat`
+- List your open issues across all repos: `gh search issues --author @me --state open`
 
 ## Failure modes
 
@@ -168,3 +285,6 @@ Return the PR URL to the user when done.
 - **Pre-commit hook fails** — see Procedure A step 4. Never `--no-verify` to bypass.
 - **`git add` accidentally staged a secret** — `git restore --staged <file>` to un-stage *before* committing. If already committed but not pushed: `git reset --soft HEAD~1` then re-stage carefully. If already pushed: stop and tell the user — secret rotation is needed.
 - **Branch is behind `main` and PR is requested** — surface to the user and ask whether to `git pull --rebase origin main` first (rebase) or `git merge origin/main` (merge commit). Don't pick for them.
+- **`gh issue create` fails with `could not find any label matching`** — the label doesn't exist on the repo. Either drop the `--label` flag or create the label first with `gh label create <name>`.
+- **About to close someone else's issue** — stop. Surface to the user and confirm before running `gh issue close`. Same for reopen.
+- **User asks to file a duplicate** — if `gh issue list --search` returns an obvious match, surface the existing issue's URL to the user before creating a new one. They may want to comment on the existing one instead.
