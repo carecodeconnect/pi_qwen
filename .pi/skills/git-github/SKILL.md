@@ -1,6 +1,6 @@
 ---
 name: git-github
-description: Commit, push, and create GitHub pull requests for this repo. Use when the user asks to commit changes, push to a branch, open a PR, or describe what's changed on the current branch. Encodes this repo's commit-message style (terse present-tense, no conventional-commit prefixes), safe staging (no `git add -A`/`git add .`), secret detection before commit, and the `gh pr create` HEREDOC pattern for PR bodies. Includes safety preflight: never force-push to main, never `--no-verify`, never commit without explicit user ask.
+description: Commit, push, and create GitHub pull requests for this repo. Use when the user asks to commit changes, push to a branch, open a PR, or describe what's changed on the current branch. Encodes this repo's commit-message style (terse present-tense, no conventional-commit prefixes), safe staging (no `git add -A`/`git add .`), secret detection before commit, and the `gh pr create` HEREDOC pattern for PR bodies. Includes a safety preflight — never force-push to main, never `--no-verify`, never commit without explicit user ask.
 ---
 
 # Git + GitHub workflow
