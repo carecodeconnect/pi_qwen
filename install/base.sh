@@ -28,7 +28,16 @@ echo "installed: $HOME/.pi/agent/models.json"
 
 # 3. Sanity check
 if ! command -v llama-server >/dev/null; then
-  echo "warning: llama-server not on PATH — install with: brew install llama.cpp" >&2
+  case "$(uname -s)" in
+    Darwin)
+      echo "warning: llama-server not on PATH — install with: brew install llama.cpp" >&2 ;;
+    Linux)
+      echo "warning: llama-server not on PATH" >&2
+      echo "         Debian trixie+/Ubuntu 26.04+:  sudo apt install llama.cpp" >&2
+      echo "         Other distros:                 build from source (https://github.com/ggml-org/llama.cpp)" >&2 ;;
+    *)
+      echo "warning: llama-server not on PATH — see https://github.com/ggml-org/llama.cpp" >&2 ;;
+  esac
 fi
 if ! command -v hf >/dev/null && ! [[ -f "$REPO_ROOT/.venv/bin/hf" ]]; then
   echo "warning: hf CLI not found — run 'uv sync' from $REPO_ROOT first" >&2
@@ -46,7 +55,8 @@ esac
 
 echo
 echo "base install complete. Next: pick a model from install/ and run it."
-echo "  install/qwen3-coder-30b.sh        # default coder model, ~21 GB"
-echo "  install/qwen3-coder-next-80b.sh   # long-context coder, ~38 GB"
-echo "  install/gpt-oss-20b.sh            # fastest, generalist, ~12 GB"
-echo "  install/glm-4.5-air.sh            # largest, agent-tuned, ~55 GB"
+echo "  install/qwen3-coder-30b.sh        # default coder model, ~21 GB  [Apple Silicon]"
+echo "  install/qwen3-coder-next-80b.sh   # long-context coder, ~38 GB   [Apple Silicon]"
+echo "  install/gpt-oss-20b.sh            # fastest, generalist, ~12 GB  [Apple Silicon]"
+echo "  install/glm-4.5-air.sh            # largest, agent-tuned, ~55 GB [Apple Silicon]"
+echo "  install/qwen-coder-3b.sh          # smallest coder, ~2 GB        [Linux/CPU, X270-class]"

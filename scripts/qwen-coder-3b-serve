@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Qwen2.5-Coder-3B-Instruct served via llama.cpp, tuned for low-spec Linux/CPU.
+# Defaults target a ThinkPad X270 (i7-7600U, 14 GiB, no GPU) — see docs/12-linux-cpu.md.
+# Override any of MODEL/HOST/PORT/CTX/ALIAS/NGL/THREADS via env.
+set -euo pipefail
+
+MODEL="${MODEL:-$HOME/models/qwen2.5-coder-3b/qwen2.5-coder-3b-instruct-q4_k_m.gguf}"
+HOST="${HOST:-127.0.0.1}"
+PORT="${PORT:-8080}"
+# 16k keeps KV cache small. The model card claims 32k native — bump CTX=32768
+# only if RSS is healthy; KV scales linearly and will dominate footprint on CPU.
+CTX="${CTX:-16384}"
+ALIAS="${ALIAS:-local-qwen2.5-coder-3b}"
+# NGL=0 forces pure CPU. On a Vulkan-enabled build with HD 620 try NGL=20.
+NGL="${NGL:-0}"
+# i7-7600U is 2c/4t. Match logical cores.
+THREADS="${THREADS:-4}"
+
+if [[ ! -f "$MODEL" ]]; then
+  echo "error: model not found at $MODEL" >&2
+  echo "       run install/qwen-coder-3b.sh first, or set MODEL=/path/to/file.gguf" >&2
+  exit 1
+fi
+
+# Qwen2.5-Coder ships a working tool-call template inside the GGUF, so we use
+# --jinja with no --chat-template-file override (unlike qwen-serve which fetches
+# the official template for Qwen3-Coder-30B). Confirm with tool-call-test before
+# adding a fetch-template step here.
+exec llama-server \
+  -m "$MODEL" \
+  --host "$HOST" --port "$PORT" \
+  -ngl "$NGL" -c "$CTX" -t "$THREADS" --jinja \
+  --temp 0.7 --top-p 0.8 --top-k 20 --repeat-penalty 1.05 \
+  -a "$ALIAS"
