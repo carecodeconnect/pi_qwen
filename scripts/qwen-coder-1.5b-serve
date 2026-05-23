@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Qwen2.5-Coder-1.5B-Instruct served via llama.cpp, tuned for low-spec Linux/CPU.
+# Defaults target a ThinkPad X270 (i7-7600U, 14 GiB, no GPU) — see docs/12-linux-cpu.md.
+# Experimental: the 3B sibling FAILs tool-call-test under tool_choice: auto
+# (family-wide wrapper bug, llama.cpp #12279). The 1.5B's behaviour is
+# unverified — run tool-call-test before trusting it for pi agent loops.
+# Override any of MODEL/HOST/PORT/CTX/ALIAS/NGL/THREADS via env.
+set -euo pipefail
+
+MODEL="${MODEL:-$HOME/models/qwen2.5-coder-1.5b/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf}"
+HOST="${HOST:-127.0.0.1}"
+PORT="${PORT:-8080}"
+# 16k keeps KV cache small. The model card claims 32k native — bump CTX=32768
+# only if RSS is healthy; KV scales linearly and will dominate footprint.
+CTX="${CTX:-16384}"
+ALIAS="${ALIAS:-local-qwen2.5-coder-1.5b}"
+# NGL=0 forces pure CPU. On a Vulkan-enabled build with HD 620 try NGL=20.
+NGL="${NGL:-0}"
+# i7-7600U is 2c/4t. Match logical cores.
+THREADS="${THREADS:-4}"
+# Override the GGUF-embedded template with Qwen's official one. Same rationale
+# as qwen-coder-3b-serve: the embedded template emits inline JSON for tool
+# calls instead of <tool_call>...</tool_call> blocks, which llama-server can't
+# parse into structured tool_calls. Fetched by install/qwen-coder-1.5b.sh.
+CHAT_TEMPLATE="${CHAT_TEMPLATE:-$HOME/models/qwen2.5-coder-1.5b/templates/qwen2.5-coder-1.5b-official.jinja}"
+
+if [[ ! -f "$MODEL" ]]; then
+  echo "error: model not found at $MODEL" >&2
+  echo "       run install/qwen-coder-1.5b.sh first, or set MODEL=/path/to/file.gguf" >&2
+  exit 1
+fi
+
+TEMPLATE_ARGS=()
+if [[ -f "$CHAT_TEMPLATE" ]]; then
+  TEMPLATE_ARGS=(--chat-template-file "$CHAT_TEMPLATE")
+else
+  echo "warning: chat template not found at $CHAT_TEMPLATE" >&2
+  echo "         falling back to GGUF-embedded template — tool calling will be unreliable" >&2
+  echo "         re-run install/qwen-coder-1.5b.sh, or fetch manually:" >&2
+  echo "           DEST_DIR=$(dirname "$CHAT_TEMPLATE") DEST=$CHAT_TEMPLATE \\\\" >&2
+  echo "             TOKCONF_URL=https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct/resolve/main/tokenizer_config.json \\\\" >&2
+  echo "             fetch-template" >&2
+fi
+
+exec llama-server \
+  -m "$MODEL" \
+  --host "$HOST" --port "$PORT" \
+  -ngl "$NGL" -c "$CTX" -t "$THREADS" --jinja \
+  "${TEMPLATE_ARGS[@]}" \
+  --temp 0.7 --top-p 0.8 --top-k 20 --repeat-penalty 1.05 \
+  -a "$ALIAS"

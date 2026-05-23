@@ -94,7 +94,24 @@ Only after the CPU baseline is proven:
 - [ ] Re-run benchmarks at `NGL=20` and `NGL=99` to see if partial offload helps.
 - [ ] Document in `docs/12-linux-cpu.md` only if the speedup is ≥30% — otherwise leave it as a footnote.
 
-## Next: pick a model that actually works in pi loops (2026-05-23)
+## Resolved: 4B reverted as default after 1.7B + 1.5B-coder both failed (2026-05-23)
+
+Empirical outcome of the A/B from the section below:
+
+- **A (Qwen2.5-Coder-1.5B): FAIL** — `tool-call-test` emits raw JSON instead
+  of `<tool_call>` tags, exactly matching the family-wide wrapper bug
+  documented for 3B/7B/32B in [llama.cpp #12279](https://github.com/ggml-org/llama.cpp/issues/12279). Confirmed locally on the X270.
+- **B (revert to Qwen3-4B-Instruct-2507): PASS** — `tool-call-test` passes
+  with structured `tool_calls`; non-thinking by design so no `--reasoning off`
+  trade-off; ~3.3 tok/s decode is acceptable with `--cache-reuse 256` and
+  the polybar governor toggle keeping the CPU in `performance` for sessions.
+
+4B-serve script also picked up the tuning we learned on 1.7B (`--mlock`,
+`--cache-reuse 256`, CTX 8192, THREADS 2). The 1.7B install + serve scripts
+stay in the repo as installable for the "fast Q&A only" use case, with
+config/models.json labels updated to make the limitation explicit.
+
+## Original A/B decision (2026-05-23) — kept for context
 
 `tool-call-test` PASS is necessary but **not sufficient**. Qwen3-1.7B passes
 the isolated test (one tool, unambiguous prompt) yet in real pi sessions

@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Qwen3-4B-Instruct-2507 served via llama.cpp, tuned for low-spec Linux/CPU.
+# Defaults target a ThinkPad X270 (i7-7600U, 14 GiB, no GPU) — see docs/12-linux-cpu.md.
+#
+# X270 agent default — restored after the 2026-05-23 swap to Qwen3-1.7B and
+# Qwen2.5-Coder-1.5B both failed real-pi tool use (1.7B skips tool calls under
+# --reasoning off; 1.5B-coder inherits the family-wide JSON-wrapper bug per
+# llama.cpp #12279). 4B-Instruct-2507 is non-thinking by design so it has no
+# --reasoning off trade-off to make — it just decides and acts. ~3.3 tok/s
+# decode on i7-7600U; first-turn prefill is the pain point, mitigated by
+# --cache-reuse so turns 2+ skip the system-prompt portion.
+# Override any of MODEL/HOST/PORT/CTX/ALIAS/NGL/THREADS via env.
+set -euo pipefail
+
+MODEL="${MODEL:-$HOME/models/qwen3-4b-instruct-2507/Qwen3-4B-Instruct-2507-Q4_K_M.gguf}"
+HOST="${HOST:-127.0.0.1}"
+PORT="${PORT:-8080}"
+# CTX=8192 fits pi's ~4.4k system prompt + several turns; 16384 was the old
+# default but doubled KV cache for no gain at typical pi prompt sizes.
+CTX="${CTX:-8192}"
+ALIAS="${ALIAS:-local-qwen3-4b-instruct-2507}"
+NGL="${NGL:-0}"
+# i7-7600U is 2c/4t. SMT typically hurts memory-bound CPU inference; -t 2
+# (physical cores) beats -t 4 on this CPU. Override if your CPU differs.
+THREADS="${THREADS:-2}"
+# Override the GGUF-embedded template with Qwen's official one (fetched by
+# install/qwen3-4b.sh). Same rationale as qwen-serve and qwen-coder-3b-serve:
+# the embedded template's tool-call emission is often slightly off and breaks
+# llama-server's tool_calls parser.
+CHAT_TEMPLATE="${CHAT_TEMPLATE:-$HOME/models/qwen3-4b-instruct-2507/templates/qwen3-4b-official.jinja}"
+
+if [[ ! -f "$MODEL" ]]; then
+  echo "error: model not found at $MODEL" >&2
+  echo "       run install/qwen3-4b.sh first, or set MODEL=/path/to/file.gguf" >&2
+  exit 1
+fi
+
+TEMPLATE_ARGS=()
+if [[ -f "$CHAT_TEMPLATE" ]]; then
+  TEMPLATE_ARGS=(--chat-template-file "$CHAT_TEMPLATE")
+else
+  echo "warning: chat template not found at $CHAT_TEMPLATE" >&2
+  echo "         falling back to GGUF-embedded template — tool calling may be unreliable" >&2
+  echo "         re-run install/qwen3-4b.sh to fetch it" >&2
+fi
+
+# Raw-speed flags learned from the 1.7B experiment:
+# --mlock pins weights in RAM (~2.5 GB easily fits in 14 GiB).
+# --cache-reuse 256 reuses KV cache across requests sharing a prefix — pi's
+#   system prompt is reused every turn, so turn-2+ prefill drops to O(new tokens).
+exec llama-server \
+  -m "$MODEL" \
+  --host "$HOST" --port "$PORT" \
+  -ngl "$NGL" -c "$CTX" -t "$THREADS" --jinja \
+  --mlock --cache-reuse 256 \
+  "${TEMPLATE_ARGS[@]}" \
+  --temp 0.7 --top-p 0.8 --top-k 20 --repeat-penalty 1.05 \
+  -a "$ALIAS"

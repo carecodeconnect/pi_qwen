@@ -51,9 +51,27 @@
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         },
         {
+          "id": "local-qwen2.5-coder-1.5b",
+          "name": "Qwen2.5-Coder-1.5B-Instruct (local, X270/CPU — completion only, FAILs tool-call-test)",
+          "reasoning": false,
+          "input": ["text"],
+          "contextWindow": 16384,
+          "maxTokens": 4096,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        },
+        {
           "id": "local-qwen3-1.7b",
-          "name": "Qwen3-1.7B (local, X270/CPU — recommended for pi agent loops, same base as jhana-rs)",
+          "name": "Qwen3-1.7B (local, X270/CPU — fast Q&A only, skips tool calls in real pi loops)",
           "reasoning": true,
+          "input": ["text"],
+          "contextWindow": 16384,
+          "maxTokens": 4096,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        },
+        {
+          "id": "local-qwen3-4b-instruct-2507",
+          "name": "Qwen3-4B-Instruct-2507 (local, X270/CPU — recommended for pi agent loops)",
+          "reasoning": false,
           "input": ["text"],
           "contextWindow": 16384,
           "maxTokens": 4096,
