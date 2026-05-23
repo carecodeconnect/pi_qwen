@@ -71,14 +71,18 @@ fi
 # --mlock pins weights in RAM so the kernel can't page them out under memory
 #   pressure (1.1 GB easily fits in 14 GiB).
 # --cache-reuse 256 lets llama-server reuse KV cache across requests that share
-#   a prefix — pi sends the same long system prompt every turn, so this cuts
-#   prompt-eval cost from O(n) to O(0) on every turn after the first.
-# -b/-ub: small batches help prompt processing on memory-bandwidth-bound CPUs.
+#   a prefix — pi sends the same long system prompt every turn, so after turn 1
+#   the system-prompt portion is skipped entirely on prefill.
+# Batch sizes left at llama.cpp defaults (-b 2048 -ub 512). An earlier version
+# of this script set -b 512 -ub 512 to "help memory bandwidth"; that actually
+# hurt prefill throughput (smaller chunks = worse matmul utilization for
+# prompt processing). Bigger -b helps prefill; -ub stays at 512 to bound
+# CPU memory pressure per kernel call.
 exec llama-server \
   -m "$MODEL" \
   --host "$HOST" --port "$PORT" \
   -ngl "$NGL" -c "$CTX" -t "$THREADS" --jinja \
-  --mlock --cache-reuse 256 -b 512 -ub 512 \
+  --mlock --cache-reuse 256 \
   "${TEMPLATE_ARGS[@]}" \
   "${THINK_ARGS[@]}" \
   --temp "$TEMP" --top-p "$TOP_P" --top-k 20 --repeat-penalty 1.05 \
