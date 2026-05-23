@@ -72,4 +72,4 @@ echo "  install/qwen3-coder-next-80b.sh   # long-context coder, ~38 GB   [Apple 
 echo "  install/gpt-oss-20b.sh            # fastest, generalist, ~12 GB  [Apple Silicon]"
 echo "  install/glm-4.5-air.sh            # largest, agent-tuned, ~55 GB [Apple Silicon]"
 echo "  install/qwen-coder-3b.sh          # smallest coder, ~2 GB        [Linux/CPU, completion only]"
-echo "  install/qwen3-4b.sh               # X270/CPU agent default, ~2.5 GB [Linux/CPU, pi tool-calling]"
+echo "  install/qwen3-1.7b.sh             # X270/CPU agent default, ~1.1 GB [Linux/CPU, pi tool-calling]"

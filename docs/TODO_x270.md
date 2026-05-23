@@ -29,10 +29,11 @@ All Q4_K_M GGUFs, all known to emit structured tool calls in current llama.cpp, 
 
 | # | Model | Size | Expected decode (i7-7600U, CPU-only) | Notes |
 |---|---|---|---|---|
-| 1 | **Qwen2.5-Coder-3B-Instruct** | ~2 GiB | ~8–10 tok/s | First trial. Smallest viable coder; fast enough for interactive pi. |
-| 2 | **Qwen2.5-Coder-7B-Instruct** | ~4.5 GiB | ~3–5 tok/s | Quality jump; borderline interactive. |
-| 3 | **Qwen3-4B-Instruct-2507** | ~2.5 GiB | ~6–8 tok/s | Newer generation, dense 4B, solid tool-calling. |
-| 4 | gpt-oss-20b MXFP4 *(already wired)* | ~11 GiB | ~3–5 tok/s | MoE 3.6B active is CPU-tractable, but **OOM risk** — needs `-c 8192`, no other workload. |
+| 1 | **Qwen3-1.7B** | ~1.1 GiB | (fastest TTFT of the set) | **Current X270 default.** Same base as jhana-rs (Phase 1 PASS, 2026-05-15). Replaced Qwen3-4B as default — 4B TTFT too slow for interactive pi loops on i7-7600U. |
+| 2 | **Qwen2.5-Coder-3B-Instruct** | ~2 GiB | ~8–10 tok/s | Smallest viable coder; FAILs `tool-call-test` under `tool_choice: auto` — use for completion only. |
+| 3 | **Qwen2.5-Coder-7B-Instruct** | ~4.5 GiB | ~3–5 tok/s | Quality jump; borderline interactive. |
+| 4 | **Qwen3-4B-Instruct-2507** | ~2.5 GiB | ~3.3 tok/s decode | Previous X270 default. Solid tool-calling but TTFT too slow on i7-7600U. |
+| 5 | gpt-oss-20b MXFP4 *(already wired)* | ~11 GiB | ~3–5 tok/s | MoE 3.6B active is CPU-tractable, but **OOM risk** — needs `-c 8192`, no other workload. |
 
 Start with #1, validate the full pipeline (serve → `tool-call-test` → pi session), then expand.
 
