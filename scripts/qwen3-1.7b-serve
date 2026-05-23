@@ -10,10 +10,18 @@ set -euo pipefail
 MODEL="${MODEL:-$HOME/models/qwen3-1.7b/Qwen3-1.7B-Q4_K_M.gguf}"
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8080}"
-CTX="${CTX:-16384}"
+# CTX=4096 keeps KV cache small and prompt-eval fast. pi's system prompt + a
+# few turns fits comfortably. Bump cautiously — KV scales linearly.
+CTX="${CTX:-4096}"
 ALIAS="${ALIAS:-local-qwen3-1.7b}"
 NGL="${NGL:-0}"
-THREADS="${THREADS:-4}"
+# i7-7600U is 2c/4t. SMT typically hurts memory-bound CPU inference; -t 2
+# (physical cores) is faster than -t 4 on this CPU. Override if your CPU differs.
+THREADS="${THREADS:-2}"
+# THINK=off disables Qwen3's thinking mode — it's on by default in 1.7B and
+# burns thousands of tokens per reply at ~3 tok/s, making pi loops unusable.
+# Set THINK=on to re-enable for reasoning-heavy tasks where TTFT doesn't matter.
+THINK="${THINK:-off}"
 # Override the GGUF-embedded template with Qwen's official one (fetched by
 # install/qwen3-1.7b.sh). Same rationale as qwen-serve: the embedded
 # template's tool-call emission is often slightly off and breaks
@@ -35,12 +43,40 @@ else
   echo "         re-run install/qwen3-1.7b.sh to fetch it" >&2
 fi
 
-# Qwen3 thinking-mode official sampler — Qwen recommends temp=0.6 / top_p=0.95
-# / top_k=20 for the reasoning variants. 1.7B is a thinking model.
+# Sampler depends on thinking mode. Qwen's official recipes:
+#   thinking on  → temp 0.6, top_p 0.95, top_k 20
+#   thinking off → temp 0.7, top_p 0.8,  top_k 20
+THINK_ARGS=()
+if [[ "$THINK" == "off" ]]; then
+  # --reasoning off skips emission of <think>...</think> tokens.
+  # --reasoning-budget 0 hard-caps think tokens to zero as a belt-and-braces
+  # guard in case the template still opens a think block.
+  # --chat-template-kwargs tells Qwen3's jinja template not to open the block
+  # in the first place (the cleanest of the three, but kwargs is the newest
+  # llama.cpp flag so we layer all three for robustness across versions).
+  THINK_ARGS=(
+    --reasoning off
+    --reasoning-budget 0
+    --chat-template-kwargs '{"enable_thinking":false}'
+  )
+  TEMP=0.7; TOP_P=0.8
+else
+  TEMP=0.6; TOP_P=0.95
+fi
+
+# Raw-speed flags for X270 CPU:
+# --mlock pins weights in RAM so the kernel can't page them out under memory
+#   pressure (1.1 GB easily fits in 14 GiB).
+# --cache-reuse 256 lets llama-server reuse KV cache across requests that share
+#   a prefix — pi sends the same long system prompt every turn, so this cuts
+#   prompt-eval cost from O(n) to O(0) on every turn after the first.
+# -b/-ub: small batches help prompt processing on memory-bandwidth-bound CPUs.
 exec llama-server \
   -m "$MODEL" \
   --host "$HOST" --port "$PORT" \
   -ngl "$NGL" -c "$CTX" -t "$THREADS" --jinja \
+  --mlock --cache-reuse 256 -b 512 -ub 512 \
   "${TEMPLATE_ARGS[@]}" \
-  --temp 0.6 --top-p 0.95 --top-k 20 --repeat-penalty 1.05 \
+  "${THINK_ARGS[@]}" \
+  --temp "$TEMP" --top-p "$TOP_P" --top-k 20 --repeat-penalty 1.05 \
   -a "$ALIAS"
