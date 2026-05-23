@@ -114,5 +114,6 @@ See TODO §6 in `docs/TODO_x270.md`.
 
 - `qwen3-4b-serve` fails with `error: model not found` → run `install/qwen3-4b.sh` first.
 - `tool-call-test` FAILs with `content` showing a markdown JSON block → the chat-template override didn't load. Check `ps -p <llama-server-pid> -o args=` for `--chat-template-file` and that the file at that path is non-empty.
+- `pi --model <id>` says `Model "..." not found` even though `config/models.json` has it → `~/.pi/agent/models.json` should be a symlink into the repo (see `install/base.sh`). Verify with `ls -l ~/.pi/agent/models.json`; if it's a real file, re-run `./install/base.sh` to convert. `pi --list-models` is the authoritative view of what pi sees.
 - llama-server exits immediately after `~/bin/qwen3-4b-serve &` from a Claude Code session → use `nohup ... &; disown` or run it in a real terminal. Job-control shells SIGHUP background children on parent exit.
 - Decode dips below ~3 tok/s sustained → CPU thermal throttling. The X270's 15W TDP and 2c/4t means the CPU sustains its 2.8 GHz base only briefly; check `watch -n1 'cat /proc/cpuinfo | grep MHz'`.

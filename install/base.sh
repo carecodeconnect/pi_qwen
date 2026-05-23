@@ -21,10 +21,22 @@ for s in qwen-test tool-call-test serve-stop fetch-template; do
   echo "installed: $dst"
 done
 
-# 2. pi provider config
+# 2. pi provider config — symlink, not copy, so edits to config/models.json
+# go live without re-running this script. If a real file (or stale symlink
+# pointing somewhere else) is already in place, back it up first.
 mkdir -p "$HOME/.pi/agent"
-cp "$REPO_ROOT/config/models.json" "$HOME/.pi/agent/models.json"
-echo "installed: $HOME/.pi/agent/models.json"
+src="$REPO_ROOT/config/models.json"
+dst="$HOME/.pi/agent/models.json"
+if [ -L "$dst" ] && [ "$(readlink -f "$dst")" = "$(readlink -f "$src")" ]; then
+  echo "symlink current: $dst -> $src"
+elif [ -e "$dst" ] || [ -L "$dst" ]; then
+  mv "$dst" "$dst.backup-$(date +%Y%m%dT%H%M%S)"
+  ln -s "$src" "$dst"
+  echo "symlinked: $dst -> $src (previous file backed up)"
+else
+  ln -s "$src" "$dst"
+  echo "symlinked: $dst -> $src"
+fi
 
 # 3. Sanity check
 if ! command -v llama-server >/dev/null; then
