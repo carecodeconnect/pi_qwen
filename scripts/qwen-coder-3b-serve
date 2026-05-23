@@ -15,6 +15,11 @@ ALIAS="${ALIAS:-local-qwen2.5-coder-3b}"
 NGL="${NGL:-0}"
 # i7-7600U is 2c/4t. Match logical cores.
 THREADS="${THREADS:-4}"
+# Override the GGUF-embedded template with Qwen's official one. The embedded
+# template emits inline JSON for tool calls instead of <tool_call>...</tool_call>
+# blocks, which llama-server can't parse into structured tool_calls. Fetched by
+# install/qwen-coder-3b.sh via scripts/fetch-template.
+CHAT_TEMPLATE="${CHAT_TEMPLATE:-$HOME/models/qwen2.5-coder-3b/templates/qwen2.5-coder-3b-official.jinja}"
 
 if [[ ! -f "$MODEL" ]]; then
   echo "error: model not found at $MODEL" >&2
@@ -22,13 +27,22 @@ if [[ ! -f "$MODEL" ]]; then
   exit 1
 fi
 
-# Qwen2.5-Coder ships a working tool-call template inside the GGUF, so we use
-# --jinja with no --chat-template-file override (unlike qwen-serve which fetches
-# the official template for Qwen3-Coder-30B). Confirm with tool-call-test before
-# adding a fetch-template step here.
+TEMPLATE_ARGS=()
+if [[ -f "$CHAT_TEMPLATE" ]]; then
+  TEMPLATE_ARGS=(--chat-template-file "$CHAT_TEMPLATE")
+else
+  echo "warning: chat template not found at $CHAT_TEMPLATE" >&2
+  echo "         falling back to GGUF-embedded template — tool calling will be unreliable" >&2
+  echo "         re-run install/qwen-coder-3b.sh, or fetch manually:" >&2
+  echo "           DEST_DIR=$(dirname "$CHAT_TEMPLATE") DEST=$CHAT_TEMPLATE \\\\" >&2
+  echo "             TOKCONF_URL=https://huggingface.co/Qwen/Qwen2.5-Coder-3B-Instruct/resolve/main/tokenizer_config.json \\\\" >&2
+  echo "             fetch-template" >&2
+fi
+
 exec llama-server \
   -m "$MODEL" \
   --host "$HOST" --port "$PORT" \
   -ngl "$NGL" -c "$CTX" -t "$THREADS" --jinja \
+  "${TEMPLATE_ARGS[@]}" \
   --temp 0.7 --top-p 0.8 --top-k 20 --repeat-penalty 1.05 \
   -a "$ALIAS"

@@ -35,6 +35,8 @@ See [docs/05-benchmarking.md](docs/05-benchmarking.md) for raw output, sweep par
 
 Should work on any Apple Silicon Mac with ≥ 32 GB RAM. Bigger context windows or higher-bit quants need more.
 
+**Linux/CPU path (X270-class):** Validated on a ThinkPad X270 (i7-7600U, 14 GiB, no GPU, Ubuntu 26.04) running [Qwen3-4B-Instruct-2507](https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF) Q4_K_M (~2.5 GB) via apt-shipped llama.cpp. `tool-call-test` passes under `tool_choice: auto`, so pi agent loops with structured tool calls work end-to-end — at ~3.3 tok/s decode, which is the floor of "interactive." Setup walkthrough in [docs/12-linux-cpu.md](docs/12-linux-cpu.md); design notes in [docs/TODO_x270.md](docs/TODO_x270.md).
+
 ## How the pieces fit
 
 ```

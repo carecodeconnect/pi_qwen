@@ -27,8 +27,21 @@ cp "$REPO_ROOT/scripts/qwen-coder-3b-serve" "$HOME/bin/qwen-coder-3b-serve" \
   && chmod +x "$HOME/bin/qwen-coder-3b-serve"
 echo "installed: $HOME/bin/qwen-coder-3b-serve"
 
-# 3. No template override — Qwen2.5-Coder embeds a working tool-call template.
-#    Confirm with tool-call-test below.
+# 3. Fetch the official chat template. The GGUF-embedded template emits inline
+#    JSON for tool calls instead of <tool_call>...</tool_call> blocks, so
+#    llama-server can't surface structured tool_calls. Verified failing with
+#    tool-call-test against the embedded template on 2026-05-23.
+TEMPLATE_DEST_DIR="$MODEL_DIR/templates"
+TEMPLATE_DEST="$TEMPLATE_DEST_DIR/qwen2.5-coder-3b-official.jinja"
+if [[ -f "$TEMPLATE_DEST" ]]; then
+  echo "template present: $TEMPLATE_DEST"
+else
+  echo "fetching official chat template"
+  DEST_DIR="$TEMPLATE_DEST_DIR" \
+    DEST="$TEMPLATE_DEST" \
+    TOKCONF_URL="https://huggingface.co/Qwen/Qwen2.5-Coder-3B-Instruct/resolve/main/tokenizer_config.json" \
+    "$REPO_ROOT/scripts/fetch-template"
+fi
 
 # 4. Validate
 echo
