@@ -10,9 +10,12 @@ set -euo pipefail
 MODEL="${MODEL:-$HOME/models/qwen3-1.7b/Qwen3-1.7B-Q4_K_M.gguf}"
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8080}"
-# CTX=4096 keeps KV cache small and prompt-eval fast. pi's system prompt + a
-# few turns fits comfortably. Bump cautiously — KV scales linearly.
-CTX="${CTX:-4096}"
+# CTX=8192 fits pi's system prompt (~4.4k tokens with skills + extensions
+# loaded) plus several turns of history. 4096 is too tight — pi errors with
+# "request exceeds available context size" before the first reply. 16384 was
+# the original but doubled KV cache size and slowed prompt processing; 8192
+# is the sweet spot for pi loops on this CPU.
+CTX="${CTX:-8192}"
 ALIAS="${ALIAS:-local-qwen3-1.7b}"
 NGL="${NGL:-0}"
 # i7-7600U is 2c/4t. SMT typically hurts memory-bound CPU inference; -t 2
