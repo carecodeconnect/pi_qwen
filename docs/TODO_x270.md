@@ -94,6 +94,48 @@ Only after the CPU baseline is proven:
 - [ ] Re-run benchmarks at `NGL=20` and `NGL=99` to see if partial offload helps.
 - [ ] Document in `docs/12-linux-cpu.md` only if the speedup is ≥30% — otherwise leave it as a footnote.
 
+## Next: pick a model that actually works in pi loops (2026-05-23)
+
+`tool-call-test` PASS is necessary but **not sufficient**. Qwen3-1.7B passes
+the isolated test (one tool, unambiguous prompt) yet in real pi sessions
+with the full system prompt (~4.4k tokens, multiple skills + extensions +
+hooks) it skips tool calls entirely and hallucinates content — e.g. invents
+`main.py`/`app.py` for a "review the codebase" prompt without ever calling
+`bash("ls")`. Likely contributing: we run with `--reasoning off` to keep
+TTFT bearable, and Qwen3-1.7B's tool-calling competence appears partly
+carried by the thinking step. This trade-off may be unrecoverable at 1.7B.
+
+Two candidates to evaluate next, both gated by a real pi session, not just
+`tool-call-test`:
+
+### A. Qwen2.5-Coder-1.5B-Instruct (already installed)
+
+- Coder-tuned, different lineage from Qwen3 — may have stronger
+  function-calling priors that don't depend on a thinking step.
+- Install script + serve script already wired
+  (`install/qwen-coder-1.5b.sh`, `scripts/qwen-coder-1.5b-serve`);
+  models.json entry labelled "experimental, tool-calling unverified."
+- Acceptance: in a real `pi --model local-qwen2.5-coder-1.5b` session,
+  emit a structured `bash` tool call when asked to inspect a directory.
+- Risk: research (2026-05-23) found `Qwen2.5-Coder` family shares a
+  template/training quirk where tool calls emit as ```json fences under
+  `tool_choice: auto` — confirmed for 3B/7B/32B by upstream issues.
+  Unknown whether the 1.5B inherits this. Run `tool-call-test` first.
+
+### B. Revert default to Qwen3-4B-Instruct-2507
+
+- The X270 default before the 1.7B swap. Validated tool-calling and
+  non-thinking by design — no `--reasoning off` trade-off to make.
+- Decode ~3.3 tok/s on i7-7600U; first-turn prefill is the pain point but
+  `--cache-reuse 256` plus the `performance` governor (now toggleable from
+  polybar via `thinkpad_x270_setup`) should keep turn-2+ usable.
+- This is a regression of the speed gain we sought, but a model that
+  *answers correctly* beats a model that *answers fast and wrong*.
+
+Order of operations: try A first (cheap), and if it also fails in a real
+pi loop, revert to B and document 1.7B as "non-agent tasks only" like the
+Qwen2.5-Coder-3B entry already is.
+
 ## Acceptance criteria
 
 Linux/X270 path is "done" when:
