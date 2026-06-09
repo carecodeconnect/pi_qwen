@@ -53,6 +53,24 @@ else
   curl -fsSL "https://raw.githubusercontent.com/ggml-org/llama.cpp/master/models/templates/meta-llama-Llama-3.1-8B-Instruct.jinja" -o "$TPL"
 fi
 
+# Instruct-mode variant: same template with "detailed thinking off" injected into the system
+# block — forces Nemotron's non-reasoning mode, which is what pi's agent loop wants (reasoning
+# mode over-thinks; see docs/13). This is the serve default; THINK=on uses the plain $TPL.
+INST="$MODEL_DIR/templates/nemotron-nano-instruct.jinja"
+if [[ -f "$INST" ]]; then
+  echo "instruct template present: $INST"
+else
+  echo "generating instruct-mode template (detailed thinking off)"
+  python3 - "$TPL" "$INST" <<'PY'
+import sys
+src=open(sys.argv[1]).read()
+src=src.replace("{%- set system_message = messages[0]['content']|trim %}",
+  r'''{%- set system_message = "detailed thinking off\n\n" + messages[0]['content']|trim %}''')
+src=src.replace('{%- set system_message = "" %}','{%- set system_message = "detailed thinking off" %}')
+open(sys.argv[2],'w').write(src)
+PY
+fi
+
 echo
 echo "done. Serve + test:"
 echo "  ./scripts/nemotron-vulkan-serve                         # 8B on :8080 (Quadro)"

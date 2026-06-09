@@ -118,6 +118,15 @@ doesn't fix the judgment.
 **Recommendation: make an *instruct coder* model (Qwen2.5/3-Coder, 7B-class) the P53 pi default;**
 keep Nemotron-Nano documented here as "validated mechanically, but a weak agent — not the default."
 
+**Caveat before writing it off — we tested the wrong mode.** Nemotron-Nano is one checkpoint with
+a runtime toggle: `detailed thinking off` switches it to *non-reasoning / instruct* mode (NVIDIA
+recommends **greedy** decoding for it). The runs above used reasoning-mode sampling (`--temp 0.6`)
+and pi never sent the directive — i.e. it ran in *reasoning* mode, the worst case for an agent.
+The serve script now **defaults to instruct mode** (`THINK=off`): the `nemotron-nano-instruct.jinja`
+template injects `detailed thinking off` into the system block and sampling is greedy (`--temp 0`).
+Retest pending — if it's *still* a poor agent in instruct mode, the 8B ceiling is real and Qwen
+wins; `THINK=on` restores reasoning mode.
+
 ## TODO
 
 - [ ] Wire an instruct coder model (Qwen2.5/3-Coder) on the same Vulkan llama-server as the P53 pi default.

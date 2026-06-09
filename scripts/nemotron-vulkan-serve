@@ -18,10 +18,15 @@
 # parser. Fetched by install/nemotron-vulkan.sh. The single-turn weather test passes
 # under the embedded template too, but multi-turn agentic use needs this one.
 #
-# Reasoning: Nemotron-Nano emit <think>. Clients suppress it by sending a system message
-# "detailed thinking off" (scripts/nemotron-vulkan-test does this; pi can via its prompt).
+# Reasoning vs instruct: Nemotron-Nano is ONE checkpoint with a runtime toggle — the system
+# directive "detailed thinking off" puts it in non-reasoning (instruct) mode, which is what you
+# want for pi's agent loop (reasoning mode over-thinks and makes erratic tool calls; see
+# docs/13 "Agent verdict"). pi doesn't send that directive, so we FORCE it: the default template
+# (nemotron-nano-instruct.jinja) injects "detailed thinking off" into the system block, and we
+# use GREEDY decoding (--temp 0), NVIDIA's recommended setting for thinking-off. Set THINK=on to
+# run reasoning mode (temp 0.6, plain template) instead.
 #
-# Override MODEL/ALIAS/CTX/PORT/BIN_DIR/GGML_VK_VISIBLE_DEVICES via env.
+# Override MODEL/ALIAS/CTX/PORT/BIN_DIR/GGML_VK_VISIBLE_DEVICES/THINK via env.
 set -uo pipefail
 
 BIN_DIR="${BIN_DIR:-$HOME/llama-vulkan/llama-b9581}"
@@ -34,8 +39,15 @@ PORT="${PORT:-8080}"
 # to stretch context further at negligible quality cost. The 4B leaves much more room.
 CTX="${CTX:-16384}"
 LOG="${LOG:-/tmp/nemotron-serve.log}"
-# Llama-3.1 tools template (lenient on roles) — required for pi's agent loop.
-CHAT_TEMPLATE="${CHAT_TEMPLATE:-$HOME/models/templates/llama-3.1-instruct-tools.jinja}"
+THINK="${THINK:-off}"   # off = instruct mode (greedy + forced "detailed thinking off"); on = reasoning
+# Template: instruct one forces "detailed thinking off"; reasoning one is the plain Llama-3.1 tools.
+if [[ "$THINK" == "on" ]]; then
+  CHAT_TEMPLATE="${CHAT_TEMPLATE:-$HOME/models/templates/llama-3.1-instruct-tools.jinja}"
+  SAMPLING=(--temp 0.6 --top-p 0.95 --top-k 20)
+else
+  CHAT_TEMPLATE="${CHAT_TEMPLATE:-$HOME/models/templates/nemotron-nano-instruct.jinja}"
+  SAMPLING=(--temp 0)   # greedy — NVIDIA's recommended setting for "detailed thinking off"
+fi
 
 if [[ ! -x "$BIN_DIR/llama-server" ]]; then
   echo "error: Vulkan llama-server not at $BIN_DIR — run install/nemotron-vulkan.sh" >&2; exit 1
@@ -57,11 +69,11 @@ export LD_LIBRARY_PATH="$BIN_DIR"
 # Select the Quadro (Vulkan device index 1; index 0 is the Intel UHD 630 iGPU).
 export GGML_VK_VISIBLE_DEVICES="${GGML_VK_VISIBLE_DEVICES:-1}"
 
-echo "serving $ALIAS on $HOST:$PORT  (ctx=$CTX, Vulkan/Quadro RTX 4000)  log=$LOG"
+echo "serving $ALIAS on $HOST:$PORT  (ctx=$CTX, THINK=$THINK, Vulkan/Quadro RTX 4000)  log=$LOG"
 "$BIN_DIR/llama-server" \
   -m "$MODEL" \
   --host "$HOST" --port "$PORT" \
   -ngl 99 -c "$CTX" -fa on --jinja \
   "${TEMPLATE_ARGS[@]}" \
-  --temp 0.6 --top-p 0.95 --top-k 20 \
+  "${SAMPLING[@]}" \
   -a "$ALIAS" 2>&1 | tee "$LOG"
