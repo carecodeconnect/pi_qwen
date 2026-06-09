@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Tool-call gate + GPU/speed diagnostics for the P53 Vulkan llama-server.
+# Run AFTER scripts/nemotron-vulkan-serve is up (another terminal). See docs/13-p53-vulkan-gpu.md.
+#
+# The tool-call check is the same one pi performs internally (cf. scripts/tool-call-test):
+# send a get_weather tool + a triggering prompt, assert a structured `tool_calls` block.
+# Adds the Nemotron "detailed thinking off" system message and reports VRAM + token usage.
+#
+#   ALIAS=nemotron-nano-8b ./scripts/nemotron-vulkan-test
+set -uo pipefail
+BASE="${BASE:-http://127.0.0.1:8080}"
+ALIAS="${ALIAS:-nemotron-nano-8b}"
+PROMPT="${1:-What is the weather in Paris? Use the tool.}"
+LOG="${LOG:-/tmp/nemotron-test.log}"
+exec > >(tee "$LOG") 2>&1
+
+echo "=== health ($BASE) ==="
+curl -fsS "$BASE/health" || { echo "FAIL: server not up — start scripts/nemotron-vulkan-serve first"; exit 1; }
+echo; echo "=== advertised model id (/v1/models) ==="
+curl -fsS "$BASE/v1/models" | jq -r '.data[].id'
+
+echo "=== TOOL-CALL TEST — model: $ALIAS ==="
+resp=$(curl -fsS "$BASE/v1/chat/completions" -H 'Content-Type: application/json' -d "$(jq -n --arg m "$ALIAS" --arg p "$PROMPT" '{
+  model:$m, stream:false,
+  messages:[{role:"system",content:"detailed thinking off"},{role:"user",content:$p}],
+  tools:[{type:"function",function:{name:"get_weather",description:"Get current weather for a city.",
+    parameters:{type:"object",properties:{city:{type:"string",description:"City name"}},required:["city"]}}}],
+  tool_choice:"auto"}')")
+tc=$(jq -c '.choices[0].message.tool_calls // empty' <<<"$resp")
+if [[ -n "$tc" && "$tc" != "null" ]]; then
+  echo "PASS: structured tool_calls ->"; jq -c '.choices[0].message.tool_calls[0].function' <<<"$resp"
+else
+  echo "FAIL: no tool_calls — returned text instead:"
+  jq -r '.choices[0].message.content' <<<"$resp" | head -12
+  echo "(if this fails, fetch the official Nemotron jinja template and set CHAT_TEMPLATE= in the serve script)"
+fi
+
+echo "=== SPEED (plain gen, max 64 tok) ==="
+curl -fsS "$BASE/v1/chat/completions" -H 'Content-Type: application/json' -d "$(jq -n --arg m "$ALIAS" '{
+  model:$m, stream:false, max_tokens:64,
+  messages:[{role:"system",content:"detailed thinking off"},{role:"user",content:"List five prime numbers."}]}')" \
+  | jq -r '"content: " + (.choices[0].message.content // "?"), "usage:   " + (.usage|tostring)'
+
+echo "=== GPU / VRAM (Quadro should show several GB used + utilization) ==="
+nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=csv,noheader
+echo "=== DONE — log at $LOG ==="

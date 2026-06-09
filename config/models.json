@@ -9,73 +9,161 @@
           "id": "qwen3-coder-30b-a3b",
           "name": "Qwen3-Coder-30B-A3B-Instruct (local)",
           "reasoning": true,
-          "input": ["text"],
+          "input": [
+            "text"
+          ],
           "contextWindow": 131072,
           "maxTokens": 8192,
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
         },
         {
           "id": "local-gpt-oss-20b",
           "name": "gpt-oss-20b (local)",
           "reasoning": true,
-          "input": ["text"],
+          "input": [
+            "text"
+          ],
           "contextWindow": 131072,
           "maxTokens": 8192,
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
         },
         {
           "id": "local-glm-4.5-air",
           "name": "GLM-4.5-Air (local)",
           "reasoning": true,
-          "input": ["text"],
+          "input": [
+            "text"
+          ],
           "contextWindow": 32768,
           "maxTokens": 8192,
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
         },
         {
           "id": "local-qwen3-coder-next",
           "name": "Qwen3-Coder-Next-80B-A3B-Instruct (local)",
           "reasoning": false,
-          "input": ["text"],
+          "input": [
+            "text"
+          ],
           "contextWindow": 131072,
           "maxTokens": 8192,
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
         },
         {
           "id": "local-qwen2.5-coder-3b",
-          "name": "Qwen2.5-Coder-3B-Instruct (local, X270/CPU — completion only, weak tool-calling)",
+          "name": "Qwen2.5-Coder-3B-Instruct (local, X270/CPU \u2014 completion only, weak tool-calling)",
           "reasoning": false,
-          "input": ["text"],
+          "input": [
+            "text"
+          ],
           "contextWindow": 16384,
           "maxTokens": 4096,
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
         },
         {
           "id": "local-qwen2.5-coder-1.5b",
-          "name": "Qwen2.5-Coder-1.5B-Instruct (local, X270/CPU — completion only, FAILs tool-call-test)",
+          "name": "Qwen2.5-Coder-1.5B-Instruct (local, X270/CPU \u2014 completion only, FAILs tool-call-test)",
           "reasoning": false,
-          "input": ["text"],
+          "input": [
+            "text"
+          ],
           "contextWindow": 16384,
           "maxTokens": 4096,
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
         },
         {
           "id": "local-qwen3-1.7b",
-          "name": "Qwen3-1.7B (local, X270/CPU — fast Q&A only, skips tool calls in real pi loops)",
+          "name": "Qwen3-1.7B (local, X270/CPU \u2014 fast Q&A only, skips tool calls in real pi loops)",
           "reasoning": true,
-          "input": ["text"],
+          "input": [
+            "text"
+          ],
           "contextWindow": 16384,
           "maxTokens": 4096,
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
         },
         {
           "id": "local-qwen3-4b-instruct-2507",
-          "name": "Qwen3-4B-Instruct-2507 (local, X270/CPU — recommended for pi agent loops)",
+          "name": "Qwen3-4B-Instruct-2507 (local, X270/CPU \u2014 recommended for pi agent loops)",
           "reasoning": false,
-          "input": ["text"],
+          "input": [
+            "text"
+          ],
           "contextWindow": 16384,
           "maxTokens": 4096,
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
+        },
+        {
+          "id": "nemotron-nano-8b",
+          "name": "Llama-3.1-Nemotron-Nano-8B-v1 (local, P53/Vulkan \u2014 Quadro RTX 4000 8GB)",
+          "reasoning": true,
+          "input": [
+            "text"
+          ],
+          "contextWindow": 16384,
+          "maxTokens": 4096,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
+        },
+        {
+          "id": "nemotron-nano-4b",
+          "name": "Llama-3.1-Nemotron-Nano-4B-v1.1 (local, P53/Vulkan \u2014 more ctx headroom)",
+          "reasoning": true,
+          "input": [
+            "text"
+          ],
+          "contextWindow": 16384,
+          "maxTokens": 4096,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
         }
       ]
     }

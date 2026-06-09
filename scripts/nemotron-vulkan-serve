@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Llama-3.1-Nemotron-Nano served via prebuilt Vulkan llama.cpp on the ThinkPad P53.
+# Hardware: Quadro RTX 4000 Mobile, 8 GB VRAM, Turing (compute 7.5). See docs/13-p53-vulkan-gpu.md.
+#
+# Why Vulkan, not CUDA: this host's CUDA toolkit (12.3) is too old for Ubuntu 26.04's
+# glibc — nvcc cannot compile against the system headers with any installed gcc (12-15),
+# and ggml-org/llama.cpp ships NO prebuilt CUDA-Linux binary. The prebuilt *Vulkan* build
+# runs on the same NVIDIA GPU with no CUDA toolchain at all, and it is the same
+# llama-server, so pi's `local-llamacpp` provider (:8080) is unchanged.
+# Install the binary + GGUFs with: install/nemotron-vulkan.sh
+#
+# Tool calling: --jinja uses the GGUF-embedded Nemotron template (tool-trained). If
+# llama-server's tool_calls parser misbehaves, override with a fetched official template
+# via CHAT_TEMPLATE (same escape hatch as qwen-serve).
+#
+# Reasoning: Nemotron-Nano emit <think>. Clients suppress it by sending a system message
+# "detailed thinking off" (scripts/nemotron-vulkan-test does this; pi can via its prompt).
+#
+# Override MODEL/ALIAS/CTX/PORT/BIN_DIR/GGML_VK_VISIBLE_DEVICES via env.
+set -uo pipefail
+
+BIN_DIR="${BIN_DIR:-$HOME/llama-vulkan/llama-b9581}"
+MODEL="${MODEL:-$HOME/models/nemotron-nano-8b-Q4_K_M.gguf}"
+ALIAS="${ALIAS:-nemotron-nano-8b}"
+HOST="${HOST:-127.0.0.1}"
+PORT="${PORT:-8080}"
+# 8B Q4 (~4.9 GB) on 8 GB VRAM: keep ctx modest so the KV cache fits. 16384 with
+# -fa on leaves headroom; raise CTX or add --cache-type-k q8_0 --cache-type-v q8_0
+# to stretch context further at negligible quality cost. The 4B leaves much more room.
+CTX="${CTX:-16384}"
+LOG="${LOG:-/tmp/nemotron-serve.log}"
+CHAT_TEMPLATE="${CHAT_TEMPLATE:-}"
+
+if [[ ! -x "$BIN_DIR/llama-server" ]]; then
+  echo "error: Vulkan llama-server not at $BIN_DIR — run install/nemotron-vulkan.sh" >&2; exit 1
+fi
+if [[ ! -f "$MODEL" ]]; then
+  echo "error: model not found at $MODEL — run install/nemotron-vulkan.sh" >&2; exit 1
+fi
+
+TEMPLATE_ARGS=()
+[[ -n "$CHAT_TEMPLATE" && -f "$CHAT_TEMPLATE" ]] && TEMPLATE_ARGS=(--chat-template-file "$CHAT_TEMPLATE")
+
+export LD_LIBRARY_PATH="$BIN_DIR"
+# Select the Quadro (Vulkan device index 1; index 0 is the Intel UHD 630 iGPU).
+export GGML_VK_VISIBLE_DEVICES="${GGML_VK_VISIBLE_DEVICES:-1}"
+
+echo "serving $ALIAS on $HOST:$PORT  (ctx=$CTX, Vulkan/Quadro RTX 4000)  log=$LOG"
+"$BIN_DIR/llama-server" \
+  -m "$MODEL" \
+  --host "$HOST" --port "$PORT" \
+  -ngl 99 -c "$CTX" -fa on --jinja \
+  "${TEMPLATE_ARGS[@]}" \
+  --temp 0.6 --top-p 0.95 --top-k 20 \
+  -a "$ALIAS" 2>&1 | tee "$LOG"
