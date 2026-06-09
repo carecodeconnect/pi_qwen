@@ -1,7 +1,28 @@
-# P53 / Vulkan GPU — Nemotron-Nano for pi
+# P53 / Vulkan GPU — local models for pi
 
 Third hardware target for this sandbox, alongside the Apple-Silicon default (Metal,
 [docs/02-models.md](./02-models.md)) and the ThinkPad X270 (CPU, [docs/12-linux-cpu.md](./12-linux-cpu.md)).
+
+## Bottom line — 8 GB VRAM is below the bar for agentic pi (VERDICT)
+
+**This architecture (Quadro RTX 4000, 8 GB) does not work as a reliable pi coding agent.** It was
+fully tested (2026-06-09) and the conclusion is a hardware limit, not a config gap:
+
+- Only **~7B** models fit 8 GB at usable quant. The best candidates were tested end-to-end in pi:
+  **Nemotron-Nano-8B** (reasoning) and **Qwen2.5-Coder-7B-Instruct** (instruct coder).
+- Tool-call *plumbing* was made to work (ollama parses calls cleanly where llama-server drops them).
+  But the **models themselves are not capable enough**: they read/explore/summarise fine, yet on
+  multi-step **write→execute** tasks the 7B **narrates tool calls as text instead of invoking them**,
+  ignores tool output in favour of training priors (e.g. the date), and degrades as context grows.
+  A system-prompt nudge (`AGENTS.md`) and fresh sessions help at the margins but don't fix it.
+
+**Usable for:** offline read / explore / summarise / Q&A on a codebase.
+**Not usable for:** autonomous coding (create files, run them, iterate) — the thing pi is for.
+
+**Recommendation:** on the P53, use the local `qwen2.5-coder` (ollama) only as a read/explore
+assistant; for real agentic coding use a **cloud model** in pi, or a machine with **≥16–24 GB VRAM**
+to run a 14B–32B coder. The rest of this doc records exactly how we reached that verdict (and the
+reproducible setup, in case a future llama.cpp / model bridges the gap).
 
 ## Hardware
 
