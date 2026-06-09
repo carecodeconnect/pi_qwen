@@ -45,7 +45,12 @@ if [[ "$THINK" == "on" ]]; then
   CHAT_TEMPLATE="${CHAT_TEMPLATE:-$HOME/models/templates/llama-3.1-instruct-tools.jinja}"
   SAMPLING=(--temp 0.6 --top-p 0.95 --top-k 20)
 else
-  CHAT_TEMPLATE="${CHAT_TEMPLATE:-$HOME/models/templates/nemotron-nano-instruct.jinja}"
+  # Nemotron's OWN template (native <AVAILABLE_TOOLS>/<TOOLCALL> tool format), patched to drop the
+  # role-alternation raise and force "detailed thinking off". Best available tool-calling path —
+  # but note llama.cpp's Llama-3.x-Nemotron tool parser is still UNMERGED (PR #15083) and the
+  # "Failed to parse input" error is a known open bug (#20650), so calls may still mangle.
+  # Fall back to the Llama-3.1 template by setting CHAT_TEMPLATE=...nemotron-nano-instruct.jinja.
+  CHAT_TEMPLATE="${CHAT_TEMPLATE:-$HOME/models/templates/nemotron-native-instruct.jinja}"
   SAMPLING=(--temp 0)   # greedy — NVIDIA's recommended setting for "detailed thinking off"
 fi
 

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Qwen2.5-Coder-7B-Instruct served via prebuilt Vulkan llama.cpp on the ThinkPad P53.
+# Same Quadro RTX 4000 / Vulkan stack as scripts/nemotron-vulkan-serve (see docs/13) — this
+# is the instruct *coder* alternative. Unlike Nemotron-Nano it's not a reasoning model, so
+# there's no thinking toggle; it's purpose-trained for code + reliable structured tool calls,
+# which is what pi's agent loop needs. Install the GGUF + template with install/qwen-coder-vulkan.sh.
+#
+# Q5_K_M (~5.4 GB) fits 8 GB with ~2.3 GB for KV at 16k ctx. Bump to Q6_K for quality or drop
+# to Q4_K_M for more context headroom. Override MODEL/ALIAS/CTX/PORT/CHAT_TEMPLATE via env.
+set -uo pipefail
+
+BIN_DIR="${BIN_DIR:-$HOME/llama-vulkan/llama-b9581}"
+MODEL="${MODEL:-$HOME/models/qwen2.5-coder-7b-instruct-Q5_K_M.gguf}"
+ALIAS="${ALIAS:-qwen2.5-coder-7b}"
+HOST="${HOST:-127.0.0.1}"
+PORT="${PORT:-8080}"
+CTX="${CTX:-16384}"
+LOG="${LOG:-/tmp/qwen-serve.log}"
+CHAT_TEMPLATE="${CHAT_TEMPLATE:-$HOME/models/templates/qwen2.5-instruct-tools.jinja}"
+
+if [[ ! -x "$BIN_DIR/llama-server" ]]; then
+  echo "error: Vulkan llama-server not at $BIN_DIR — run install/nemotron-vulkan.sh (shared binary)" >&2; exit 1
+fi
+if [[ ! -f "$MODEL" ]]; then
+  echo "error: model not found at $MODEL — run install/qwen-coder-vulkan.sh" >&2; exit 1
+fi
+
+TEMPLATE_ARGS=()
+[[ -n "$CHAT_TEMPLATE" && -f "$CHAT_TEMPLATE" ]] && TEMPLATE_ARGS=(--chat-template-file "$CHAT_TEMPLATE")
+
+export LD_LIBRARY_PATH="$BIN_DIR"
+export GGML_VK_VISIBLE_DEVICES="${GGML_VK_VISIBLE_DEVICES:-1}"   # Quadro (device 0 = Intel iGPU)
+
+echo "serving $ALIAS on $HOST:$PORT  (ctx=$CTX, Vulkan/Quadro RTX 4000)  log=$LOG"
+"$BIN_DIR/llama-server" \
+  -m "$MODEL" \
+  --host "$HOST" --port "$PORT" \
+  -ngl 99 -c "$CTX" -fa on --jinja \
+  "${TEMPLATE_ARGS[@]}" \
+  --temp 0.2 --top-p 0.9 \
+  -a "$ALIAS" 2>&1 | tee "$LOG"

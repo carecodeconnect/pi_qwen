@@ -122,10 +122,26 @@ keep Nemotron-Nano documented here as "validated mechanically, but a weak agent 
 a runtime toggle: `detailed thinking off` switches it to *non-reasoning / instruct* mode (NVIDIA
 recommends **greedy** decoding for it). The runs above used reasoning-mode sampling (`--temp 0.6`)
 and pi never sent the directive — i.e. it ran in *reasoning* mode, the worst case for an agent.
-The serve script now **defaults to instruct mode** (`THINK=off`): the `nemotron-nano-instruct.jinja`
-template injects `detailed thinking off` into the system block and sampling is greedy (`--temp 0`).
-Retest pending — if it's *still* a poor agent in instruct mode, the 8B ceiling is real and Qwen
-wins; `THINK=on` restores reasoning mode.
+The serve script defaults to instruct mode (`THINK=off`): greedy + forced `detailed thinking off`.
+
+**Instruct-mode retest result: still not an agent — and it's partly upstream.** In `pi`, instruct
+mode stopped the over-thinking but the model **hallucinated its own tool list as the "codebase
+summary," made no real tool calls**, and even when told "use tools, do not guess" returned a
+manual-git essay ("I don't have access"). When it *did* attempt a call, llama.cpp threw
+`Failed to parse input at pos 47` (it emitted the param *schema* shape, not arguments).
+
+A GitHub search shows this is **not just the model** — llama.cpp's **Llama-3.x-Nemotron tool
+parser is unmerged** (PR #15083), the `Failed to parse input … tool calling` 500 is a **known open
+bug** (#20650), and the generic autoparser is documented to misclassify Nemotron output
+(#20325, #20754). So Nemotron-Nano tool-calling on the current llama.cpp release is **upstream-
+incomplete**, not a config we can fully fix.
+
+Workaround attempted: serve now defaults to Nemotron's **own** template (native
+`<AVAILABLE_TOOLS>`/`<TOOLCALL>` format), patched to drop the role-alternation raise and force
+instruct mode (`nemotron-native-instruct.jinja`). It's the best available path but is capped by the
+missing parser. **Net: use an instruct coder (Qwen2.5-Coder, first-class llama.cpp tool support)
+as the P53 pi default; keep Nemotron-Nano here as "mechanically validated, but tool-calling is
+upstream-blocked — revisit when PR #15083 lands."**
 
 ## TODO
 
