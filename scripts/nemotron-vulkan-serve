@@ -9,9 +9,14 @@
 # llama-server, so pi's `local-llamacpp` provider (:8080) is unchanged.
 # Install the binary + GGUFs with: install/nemotron-vulkan.sh
 #
-# Tool calling: --jinja uses the GGUF-embedded Nemotron template (tool-trained). If
-# llama-server's tool_calls parser misbehaves, override with a fetched official template
-# via CHAT_TEMPLATE (same escape hatch as qwen-serve).
+# Tool calling: we DON'T use the GGUF-embedded Nemotron template — it raises
+# "Conversation roles must alternate" on the non-alternating message sequences pi's
+# agent loop produces (tool results + context compaction), and llama-server can't
+# auto-generate a tool parser from it. Instead we pass llama.cpp's canonical
+# meta-llama-Llama-3.1-8B-Instruct.jinja (the Nano models are Llama-3.1-derived, same
+# tokenizer) via --chat-template-file. It's lenient on roles and tested with the tool
+# parser. Fetched by install/nemotron-vulkan.sh. The single-turn weather test passes
+# under the embedded template too, but multi-turn agentic use needs this one.
 #
 # Reasoning: Nemotron-Nano emit <think>. Clients suppress it by sending a system message
 # "detailed thinking off" (scripts/nemotron-vulkan-test does this; pi can via its prompt).
@@ -29,7 +34,8 @@ PORT="${PORT:-8080}"
 # to stretch context further at negligible quality cost. The 4B leaves much more room.
 CTX="${CTX:-16384}"
 LOG="${LOG:-/tmp/nemotron-serve.log}"
-CHAT_TEMPLATE="${CHAT_TEMPLATE:-}"
+# Llama-3.1 tools template (lenient on roles) — required for pi's agent loop.
+CHAT_TEMPLATE="${CHAT_TEMPLATE:-$HOME/models/templates/llama-3.1-instruct-tools.jinja}"
 
 if [[ ! -x "$BIN_DIR/llama-server" ]]; then
   echo "error: Vulkan llama-server not at $BIN_DIR — run install/nemotron-vulkan.sh" >&2; exit 1
@@ -39,7 +45,13 @@ if [[ ! -f "$MODEL" ]]; then
 fi
 
 TEMPLATE_ARGS=()
-[[ -n "$CHAT_TEMPLATE" && -f "$CHAT_TEMPLATE" ]] && TEMPLATE_ARGS=(--chat-template-file "$CHAT_TEMPLATE")
+if [[ -n "$CHAT_TEMPLATE" && -f "$CHAT_TEMPLATE" ]]; then
+  TEMPLATE_ARGS=(--chat-template-file "$CHAT_TEMPLATE")
+else
+  echo "warning: chat template not found at $CHAT_TEMPLATE — falling back to the GGUF-embedded" >&2
+  echo "         Nemotron template, which BREAKS pi's multi-turn agent loop (role-alternation" >&2
+  echo "         raise). Run install/nemotron-vulkan.sh to fetch it." >&2
+fi
 
 export LD_LIBRARY_PATH="$BIN_DIR"
 # Select the Quadro (Vulkan device index 1; index 0 is the Intel UHD 630 iGPU).

@@ -83,17 +83,20 @@ pi --model nemotron-nano-8b      # or nemotron-nano-4b
 
 ## Results (measured — `nemotron-nano-8b`, ctx 16384, P53 Quadro/Vulkan)
 
-- **Tool calls: PASS** — `--jinja` + the GGUF-embedded Nemotron template produced a clean
-  structured `tool_calls` (`get_weather({"city":"Paris"})`). No official-template override needed.
-  llama-server reports `Chat format: peg-native`.
+- **Tool calls: PASS** — clean structured `tool_calls` (`get_weather({"city":"Paris"})`).
+- **Chat template (important):** the GGUF-embedded Nemotron template passes the *single-turn*
+  weather test, but **breaks pi's multi-turn agent loop** — it `raise_exception`s
+  *"Conversation roles must alternate between user/tool and assistant"* on the non-alternating
+  sequences pi produces (tool results + context compaction), and llama-server can't auto-build a
+  tool parser from it. Fix: serve with llama.cpp's **`meta-llama-Llama-3.1-8B-Instruct.jinja`**
+  (role-lenient, tool-parser-tested; Nano is Llama-3.1-derived) via `--chat-template-file` —
+  now the serve-script default (`CHAT_TEMPLATE`), fetched by the install script.
 - **VRAM: 6595 MiB / 8192** with all layers offloaded (`-ngl 99`) — ~1.6 GB headroom.
 - **Decode: ~29–45 tok/s** (usable for agent loops).
 - **Prefill: ~6–10 tok/s** — slow; Vulkan-on-Turing weakness, not present on CUDA/Metal.
   Mitigations: keep prompts/skills lean, lean on the prompt cache (enabled), or upgrade to CUDA.
-- **Quirk:** on a *tool-less* completion the model leaked an empty `<TOOLCALL>[]` marker into
-  the text. Harmless for pi (it always sends tools, and the real tool call parsed clean), but
-  watch for it on plain text replies; if it bothers, fetch the official Nemotron jinja template
-  and set `CHAT_TEMPLATE=` in the serve script.
+- **Quirk (embedded template only):** the embedded template also leaked an empty `<TOOLCALL>[]`
+  marker into tool-less replies — another reason the Llama-3.1 template above is the default.
 
 ## TODO
 

@@ -39,6 +39,20 @@ dl "bartowski/nvidia_Llama-3.1-Nemotron-Nano-4B-v1.1-GGUF" \
    "nvidia_Llama-3.1-Nemotron-Nano-4B-v1.1-Q4_K_M.gguf" \
    "$MODEL_DIR/nemotron-nano-4b-Q4_K_M.gguf"
 
+# --- 3. lenient Llama-3.1 tools chat template -------------------------------
+# The GGUF-embedded Nemotron template raises "roles must alternate" on pi's agent
+# loop. llama.cpp's meta-llama-Llama-3.1-8B-Instruct.jinja is role-lenient and works
+# with the tool parser (Nano is Llama-3.1-derived → same tokenizer). serve uses it
+# via CHAT_TEMPLATE.
+TPL="$MODEL_DIR/templates/llama-3.1-instruct-tools.jinja"
+mkdir -p "$MODEL_DIR/templates"
+if [[ -f "$TPL" ]]; then
+  echo "chat template present: $TPL"
+else
+  echo "fetching Llama-3.1 tools chat template"
+  curl -fsSL "https://raw.githubusercontent.com/ggml-org/llama.cpp/master/models/templates/meta-llama-Llama-3.1-8B-Instruct.jinja" -o "$TPL"
+fi
+
 echo
 echo "done. Serve + test:"
 echo "  ./scripts/nemotron-vulkan-serve                         # 8B on :8080 (Quadro)"

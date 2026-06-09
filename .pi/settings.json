@@ -4,7 +4,9 @@
     {
       "source": "npm:pi-hooks",
       "extensions": [
-        "-ralph-loop/ralph-loop.ts"
+        "-ralph-loop/ralph-loop.ts",
+        "-lsp/lsp.ts",
+        "-lsp/lsp-tool.ts"
       ]
     }
   ]
