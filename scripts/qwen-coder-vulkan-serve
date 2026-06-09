@@ -16,7 +16,11 @@ HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8080}"
 CTX="${CTX:-16384}"
 LOG="${LOG:-/tmp/qwen-serve.log}"
-CHAT_TEMPLATE="${CHAT_TEMPLATE:-$HOME/models/templates/qwen2.5-instruct-tools.jinja}"
+# Qwen's OFFICIAL template (with the <tools> block + <tool_call> wrapper). The llama.cpp-bundled
+# Qwen2.5 template made the model emit unparseable <function .../> tags → pi saw text and appeared
+# to hallucinate running commands (exactly the bug in docs/04-tool-calling.md). Official template
+# fixes the wrapper so llama-server parses structured tool_calls. Fetched by install/qwen-coder-vulkan.sh.
+CHAT_TEMPLATE="${CHAT_TEMPLATE:-$HOME/models/templates/qwen2.5-coder-official.jinja}"
 
 if [[ ! -x "$BIN_DIR/llama-server" ]]; then
   echo "error: Vulkan llama-server not at $BIN_DIR — run install/nemotron-vulkan.sh (shared binary)" >&2; exit 1

@@ -182,6 +182,29 @@
           }
         }
       ]
+    },
+    "local-ollama": {
+      "baseUrl": "http://127.0.0.1:11434/v1",
+      "api": "openai-completions",
+      "apiKey": "not-needed",
+      "models": [
+        {
+          "id": "qwen2.5-coder",
+          "name": "Qwen2.5-Coder-7B-Instruct (local, P53 \u2014 via OLLAMA; clean tool-call parsing where llama-server drops them)",
+          "reasoning": false,
+          "input": [
+            "text"
+          ],
+          "contextWindow": 32768,
+          "maxTokens": 4096,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
+        }
+      ]
     }
   }
 }

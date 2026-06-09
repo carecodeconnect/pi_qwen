@@ -178,6 +178,35 @@ upstream parser (#15083)**, not our setup — so there is nothing further to tun
 **Nemotron-Nano is not the P53 pi agent; Qwen2.5-Coder-7B-Instruct is.** Re-open this test when
 #15083 merges and we bump the `llama.cpp` build (`LLAMA_TAG` in `install/nemotron-vulkan.sh`).
 
+## The real blocker: llama-server tool-call PARSING (use ollama for small models)
+
+Testing Qwen2.5-Coder-7B exposed that the "hallucination" of *both* models was **never a model
+ceiling — it's llama-server's tool-call parser** on this build (b9581, Vulkan):
+
+- Qwen2.5-Coder emits `<function name="list_dir" arguments='{"path":"."}'/>`; llama-server's
+  `peg-native` autoparser **does not convert it to `tool_calls`**, so pi sees raw text and the model
+  *appears* to hallucinate running commands (it prints `$ bash ls` markdown with invented output).
+  This is the exact failure described in [docs/04-tool-calling.md](./04-tool-calling.md), but the
+  official-vs-bundled Qwen2.5 template swap **does not fix it** (both templates are identical and
+  both yield the unparsed `<function>` form).
+- Nemotron-Nano hits the same wall via a different format (`<TOOLCALL>` + upstream parser gap #15083).
+
+**ollama parses both cleanly** — it bundles the correct per-model tool template + parser. Verified
+via its OpenAI endpoint: `qwen2.5-coder` returns a clean structured `tool_call`
+(`list_dir({"path":"."})`, no `<function>` tag) and handles multi-turn tool results.
+
+**Resolution:** added a **`local-ollama`** provider (`http://127.0.0.1:11434/v1`) to
+`config/models.json` with `qwen2.5-coder`. Run the agent there:
+
+```bash
+cp config/models.json ~/.pi/agent/models.json
+pi --model qwen2.5-coder          # ollama — tool calls actually parse
+```
+
+The `local-llamacpp` Vulkan path stays for non-tool use / benchmarking, but for **agentic pi on the
+P53, use the ollama provider** until llama.cpp's small-model tool parsing improves (track #15083 and
+the Qwen `<function>` parsing). This is a llama.cpp-version issue, not the GPU/Vulkan stack.
+
 ## TODO
 
 - [x] Wire an instruct coder (Qwen2.5-Coder-7B-Instruct) on the same Vulkan llama-server — done
