@@ -138,14 +138,51 @@ incomplete**, not a config we can fully fix.
 
 Workaround attempted: serve now defaults to Nemotron's **own** template (native
 `<AVAILABLE_TOOLS>`/`<TOOLCALL>` format), patched to drop the role-alternation raise and force
-instruct mode (`nemotron-native-instruct.jinja`). It's the best available path but is capped by the
-missing parser. **Net: use an instruct coder (Qwen2.5-Coder, first-class llama.cpp tool support)
+instruct mode (`nemotron-native-instruct.jinja`). This **partially worked** — with the native
+template the model made a *real* tool call (`ls` executed and returned the actual repo contents:
+`install`, `pyproject.toml`, `scripts`, `src`, `uv.lock`). **But the next call mangled:** a
+**well-formed** `{"name":"bash","arguments":{"command":"ls …/config"}}` died with
+`Failed to parse input at pos 495`. llama.cpp failed to parse *valid* tool-call JSON — i.e. the
+blocker is demonstrably the **parser**, not the model. Intermittent success, but unreliable for a
+sustained agent loop; capped by the missing parser. **Net: use an instruct coder (Qwen2.5-Coder, first-class llama.cpp tool support)
 as the P53 pi default; keep Nemotron-Nano here as "mechanically validated, but tool-calling is
 upstream-blocked — revisit when PR #15083 lands."**
 
+### Upstream references (llama.cpp tool-calling for Llama-3.x / Nemotron)
+
+The agentic failures above are tracked upstream — this is why we're **parking the Nemotron
+agent test rather than chasing more config**:
+
+- **[ggml-org/llama.cpp#15083](https://github.com/ggml-org/llama.cpp/pull/15083)** — *PR (open):*
+  "model: add reasoning/tool parsing to Llama 3.x Nemotron." The actual parser we need; **not yet
+  merged**, so current releases have no first-class Llama-3.x-Nemotron tool parsing.
+- **[ggml-org/llama.cpp#20650](https://github.com/ggml-org/llama.cpp/issues/20650)** — *Issue
+  (open):* "500 — Failed to parse input at pos x when tool calling." **Our exact error.**
+- **[ggml-org/llama.cpp#20325](https://github.com/ggml-org/llama.cpp/issues/20325)** /
+  **[#20754](https://github.com/ggml-org/llama.cpp/issues/20754)** — autoparser misplaces /
+  misclassifies Nemotron-Nano output (non-thinking content read as reasoning).
+- **[ggml-org/llama.cpp#24081](https://github.com/ggml-org/llama.cpp/issues/24081)** — Nemotron
+  Nano v2: `json_schema` + greedy → 500 "Failed to parse input … `<SPECIAL_12>`."
+- **[ggml-org/llama.cpp#23029](https://github.com/ggml-org/llama.cpp/pull/23029)** — *PR (open):*
+  "chat: add Nemotron Nano v2 specialized parser" (the Mamba-hybrid line; also unmerged).
+- **[ggml-org/llama.cpp#20268](https://github.com/ggml-org/llama.cpp/issues/20268)** /
+  **[#22043](https://github.com/ggml-org/llama.cpp/issues/22043)** — Nemotron-Nano-9B-v2 broken on
+  llama-server; `parallel_tool_calls` infinite loop on Nemotron-3-Nano-4B.
+
+### Test status: CONCLUDED (parked) — 2026-06-09
+
+We exhausted the configurable surface: reasoning vs **instruct** mode (`detailed thinking off` +
+greedy), the **lenient Llama-3.1** template, and Nemotron's **own native** `<TOOLCALL>` template
+(role-raise patched out). Tool-calling remained unreliable, and the root cause is an **unmerged
+upstream parser (#15083)**, not our setup — so there is nothing further to tune locally. Decision:
+**Nemotron-Nano is not the P53 pi agent; Qwen2.5-Coder-7B-Instruct is.** Re-open this test when
+#15083 merges and we bump the `llama.cpp` build (`LLAMA_TAG` in `install/nemotron-vulkan.sh`).
+
 ## TODO
 
-- [ ] Wire an instruct coder model (Qwen2.5/3-Coder) on the same Vulkan llama-server as the P53 pi default.
+- [x] Wire an instruct coder (Qwen2.5-Coder-7B-Instruct) on the same Vulkan llama-server — done
+      (`scripts/qwen-coder-vulkan-serve`, `install/qwen-coder-vulkan.sh`, `models.json`).
+- [ ] A/B Qwen vs Nemotron in pi on the same tasks; set Qwen as the documented P53 default.
+- [ ] Re-test Nemotron tool-calling after llama.cpp#15083 merges (bump `LLAMA_TAG`).
 - [ ] Tune `CTX` / `--cache-type-k|v q8_0` for longest stable context on 8 GB.
-- [ ] Revisit Nemotron-Nano-v2 (Mamba) once ollama/llama-server support stabilises.
 - [ ] Optional: upgrade CUDA toolkit → 13.x for a native CUDA build (faster prefill than Vulkan).
