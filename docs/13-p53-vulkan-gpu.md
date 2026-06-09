@@ -196,10 +196,11 @@ via its OpenAI endpoint: `qwen2.5-coder` returns a clean structured `tool_call`
 (`list_dir({"path":"."})`, no `<function>` tag) and handles multi-turn tool results.
 
 **Resolution:** added a **`local-ollama`** provider (`http://127.0.0.1:11434/v1`) to
-`config/models.json` with `qwen2.5-coder`. Run the agent there:
+`config/models.json` with `qwen2.5-coder`. One-shot setup (installs ollama, pulls the model,
+deploys the provider config):
 
 ```bash
-cp config/models.json ~/.pi/agent/models.json
+./install/qwen-ollama.sh
 pi --model qwen2.5-coder          # ollama — tool calls actually parse
 ```
 
@@ -209,9 +210,16 @@ the Qwen `<function>` parsing). This is a llama.cpp-version issue, not the GPU/V
 
 **VALIDATED in pi (2026-06-09):** `pi --model qwen2.5-coder` (ollama) executed a real
 `read README.md` and produced an **accurate, grounded** summary of the actual repo (correct model
-lineup, serve scripts, docs paths) — no invention. **This is the P53 pi default.** Minor residual:
-it over-tools trivial prompts (read docs for "hello?") — curb with a system-prompt nudge ("only call
-tools when the task needs them; answer greetings directly").
+lineup, serve scripts, docs paths) — no invention. **This is the P53 pi default.**
+
+Residual 7B-class quirks (usable, not flawless):
+- **Over-tools trivial prompts** (read docs for "hello?"). Curb with a system-prompt nudge:
+  "only call tools when the task needs them; answer greetings directly."
+- **Intermittent prior-vs-tool grounding lapse:** `$ date` returned the correct `…Jun 2026`, but
+  once the model answered "June 5, 2023" from its training prior; on pushback ("you got it wrong")
+  it re-read the tool output and corrected to "June 9, 2026." A nudge helps:
+  "treat tool output as ground truth; never answer from training memory when a tool returned data."
+- These are 7B-on-8 GB limits — a larger model would be steadier but doesn't fit the Quadro.
 
 ## TODO
 
