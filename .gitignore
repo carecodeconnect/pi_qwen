@@ -21,3 +21,4 @@ __pycache__/
 # pi extensions — commit settings.json (the manifest) but not the resolved node_modules
 .pi/npm/node_modules/
 .pi/npm/package-lock.json
+.pi/npm/
