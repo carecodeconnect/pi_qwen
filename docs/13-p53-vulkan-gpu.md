@@ -207,11 +207,19 @@ The `local-llamacpp` Vulkan path stays for non-tool use / benchmarking, but for 
 P53, use the ollama provider** until llama.cpp's small-model tool parsing improves (track #15083 and
 the Qwen `<function>` parsing). This is a llama.cpp-version issue, not the GPU/Vulkan stack.
 
+**VALIDATED in pi (2026-06-09):** `pi --model qwen2.5-coder` (ollama) executed a real
+`read README.md` and produced an **accurate, grounded** summary of the actual repo (correct model
+lineup, serve scripts, docs paths) — no invention. **This is the P53 pi default.** Minor residual:
+it over-tools trivial prompts (read docs for "hello?") — curb with a system-prompt nudge ("only call
+tools when the task needs them; answer greetings directly").
+
 ## TODO
 
-- [x] Wire an instruct coder (Qwen2.5-Coder-7B-Instruct) on the same Vulkan llama-server — done
-      (`scripts/qwen-coder-vulkan-serve`, `install/qwen-coder-vulkan.sh`, `models.json`).
-- [ ] A/B Qwen vs Nemotron in pi on the same tasks; set Qwen as the documented P53 default.
-- [ ] Re-test Nemotron tool-calling after llama.cpp#15083 merges (bump `LLAMA_TAG`).
+- [x] Wire an instruct coder (Qwen2.5-Coder-7B-Instruct) — done (Vulkan serve + ollama provider).
+- [x] A/B Qwen vs Nemotron in pi — done. **Winner: `qwen2.5-coder` via the ollama provider**
+      (real tool calls, grounded summaries). Set as the P53 pi default.
+- [ ] Add a system-prompt nudge to curb over-tooling of trivial prompts (greetings → answer directly).
+- [ ] Re-test the llama-server (Vulkan) tool path after llama.cpp#15083 / Qwen `<function>` parsing
+      lands (bump `LLAMA_TAG`) — would let us drop the ollama dependency for repo consistency.
 - [ ] Tune `CTX` / `--cache-type-k|v q8_0` for longest stable context on 8 GB.
 - [ ] Optional: upgrade CUDA toolkit → 13.x for a native CUDA build (faster prefill than Vulkan).
