@@ -98,9 +98,29 @@ pi --model nemotron-nano-8b      # or nemotron-nano-4b
 - **Quirk (embedded template only):** the embedded template also leaked an empty `<TOOLCALL>[]`
   marker into tool-less replies — another reason the Llama-3.1 template above is the default.
 
+## Agent verdict — stack works, Nemotron-Nano is a poor pi agent
+
+Ran pi end-to-end against `nemotron-nano-8b`. The mechanics are perfect (tools fire, no
+errors, GPU ~44 tok/s decode), but the **model is an erratic agent**, in both directions:
+
+- **Over-tools trivial prompts:** "hello?" → web-searched *and* code-searched "hello", then
+  emitted a degenerate `code_search` with an **empty query**.
+- **Under-tools real tasks:** "summarise this codebase" → used **no tools at all** and returned
+  a canned *"I don't have access to the code"* non-answer (it didn't realise it could read files).
+- **Burns context** fast (repeated auto-compaction on trivial turns).
+
+This matches [docs/12-linux-cpu.md](./12-linux-cpu.md): the X270 deliberately chose an *instruct*
+model (Qwen3-4B-Instruct-2507) over a *reasoning* one for pi loops, because reasoning models
+over-think and stall. **Nemotron-Nano (reasoning) is the same failure mode.** A system-prompt
+nudge ("only call tools when needed; never empty args; answer greetings directly") helps but
+doesn't fix the judgment.
+
+**Recommendation: make an *instruct coder* model (Qwen2.5/3-Coder, 7B-class) the P53 pi default;**
+keep Nemotron-Nano documented here as "validated mechanically, but a weak agent — not the default."
+
 ## TODO
 
-- [ ] Run pi end-to-end (`pi --model nemotron-nano-8b`) on a real coding task; compare 8B vs 4B.
+- [ ] Wire an instruct coder model (Qwen2.5/3-Coder) on the same Vulkan llama-server as the P53 pi default.
 - [ ] Tune `CTX` / `--cache-type-k|v q8_0` for longest stable context on 8 GB.
 - [ ] Revisit Nemotron-Nano-v2 (Mamba) once ollama/llama-server support stabilises.
 - [ ] Optional: upgrade CUDA toolkit → 13.x for a native CUDA build (faster prefill than Vulkan).
