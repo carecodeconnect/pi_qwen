@@ -164,6 +164,22 @@
             "cacheRead": 0,
             "cacheWrite": 0
           }
+        },
+        {
+          "id": "qwen2.5-coder-7b",
+          "name": "Qwen2.5-Coder-7B-Instruct (local, P53/Vulkan \u2014 instruct coder, first-class tool support)",
+          "reasoning": false,
+          "input": [
+            "text"
+          ],
+          "contextWindow": 16384,
+          "maxTokens": 4096,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
         }
       ]
     }
