@@ -177,42 +177,44 @@ Exit pi with `/exit` or Ctrl-D. The server keeps running across pi sessions; sto
 pi_sandbox/
 ├── README.md           # this file — summary + docs index
 ├── LICENSE             # MIT
+├── AGENTS.md           # system-prompt guidance pi loads (tool-use nudges for small models)
 ├── docs/               # detailed docs, one per stage
-│   ├── 01-quickstart.md
-│   ├── 02-models.md
-│   ├── 03-serving.md
-│   ├── 04-tool-calling.md
-│   ├── 05-benchmarking.md
-│   ├── 06-troubleshooting.md
-│   ├── 07-engines.md
-│   ├── 08-demo.md
-│   ├── 09-skills.md
-│   ├── 10-extensions.md
-│   └── 11-prompt-engineering.md
+│   ├── 01-quickstart.md … 11-prompt-engineering.md   # the Apple-Silicon walkthrough
+│   ├── 12-linux-cpu.md          # ThinkPad X270 (CPU-only) target
+│   ├── 13-p53-vulkan-gpu.md     # ThinkPad P53 (8 GB Vulkan GPU / ollama) target
+│   ├── TODO_skills.md / TODO_x270.md                 # design notes & open threads
+│   └── codebase-workflow.mmd    # source for the README mermaid diagram
 ├── install/            # one-shot install scripts (idempotent)
-│   ├── base.sh                    # copies scripts + models.json into place
-│   ├── qwen3-coder-30b.sh         # default coder model, ~21 GB
-│   ├── qwen3-coder-next-80b.sh    # long-context coder, ~38 GB
-│   ├── gpt-oss-20b.sh             # fastest, generalist, ~12 GB
-│   ├── glm-4.5-air.sh             # largest, agent-tuned, ~55 GB
-│   ├── all-models.sh              # base + all four models in sequence
-│   └── vllm-mlx.sh                # alternative engine (Python+MLX, no Xcode)
+│   ├── base.sh                       # copies scripts + models.json into place
+│   ├── qwen3-coder-30b.sh            # default coder model, ~21 GB   [Apple Silicon]
+│   ├── qwen3-coder-next-80b.sh       # long-context coder, ~38 GB    [Apple Silicon]
+│   ├── gpt-oss-20b.sh                # fastest, generalist, ~12 GB   [Apple Silicon]
+│   ├── glm-4.5-air.sh                # largest, agent-tuned, ~55 GB  [Apple Silicon]
+│   ├── all-models.sh                 # base + all four models in sequence
+│   ├── vllm-metal.sh / vllm-mlx.sh   # alternative engines (Python, no Xcode)
+│   ├── qwen3-4b.sh / qwen3-1.7b.sh / qwen-coder-3b.sh / qwen-coder-1.5b.sh   # X270/CPU
+│   ├── qwen-coder-vulkan.sh / nemotron-vulkan.sh     # P53 llama.cpp/Vulkan path
+│   ├── qwen-ollama.sh                # P53 ollama path: Qwen2.5-Coder-7B
+│   └── nemotron-lightning-ollama.sh  # P53 ollama path: Nemotron 3.5 Lightning (pi default)
 ├── scripts/
-│   ├── qwen-serve      # start llama-server for Qwen3-Coder-30B-A3B
-│   ├── qwennext-serve  # alternate: Qwen3-Coder-Next-80B-A3B
-│   ├── gptoss-serve    # alternate: OpenAI gpt-oss-20b
-│   ├── glmair-serve    # alternate: Z.ai GLM-4.5-Air
+│   ├── qwen-serve / qwennext-serve / gptoss-serve / glmair-serve   # Apple-Silicon llama-server
+│   ├── vllm-metal-serve / vllm-mlx-serve                           # alternative engines
+│   ├── qwen3-4b-serve / qwen3-1.7b-serve / qwen-coder-3b-serve / qwen-coder-1.5b-serve  # X270
+│   ├── nemotron-vulkan-serve / nemotron-vulkan-test / qwen-coder-vulkan-serve           # P53
 │   ├── serve-stop      # kill whatever llama-server is on port 8080
 │   ├── qwen-test       # one-shot chat-completion smoke test
 │   ├── tool-call-test  # model-agnostic check that pi-style tool_calls fire
-│   └── fetch-template  # fetch Qwen's official chat template (fixes tool calls)
+│   ├── fetch-template  # fetch Qwen's official chat template (fixes tool calls)
+│   └── repo-lint       # bash -n every script + jq-validate models.json (CI runs this)
 ├── bench/
-│   └── throughput.sh   # llama-bench wrapper for pp/tg tok/s
+│   ├── throughput.sh        # llama-bench wrapper for pp/tg tok/s
+│   └── engine-compare.py    # cross-engine comparison harness
 ├── demo/
 │   ├── pi-qwen.tape    # vhs script for the README demo
 │   └── smoke.tape      # minimal vhs script to verify the toolchain
-└── config/
-    └── models.json     # pi provider config (copy to ~/.pi/agent/)
+├── config/
+│   └── models.json     # pi provider config (symlinked to ~/.pi/agent/ by base.sh)
+└── src/ + Cargo.toml   # placeholder Rust crate — nothing runs through it (see docs/07-engines.md)
 ```
 
 ## Credits

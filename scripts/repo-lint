@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Repo lint: bash syntax on every script + JSON validity of the pi provider
+# config. Cheap enough to run before every commit; CI runs it on push.
+set -euo pipefail
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+fail=0
+for f in "$REPO_ROOT"/scripts/* "$REPO_ROOT"/install/*.sh "$REPO_ROOT"/bench/*.sh; do
+  [[ -f "$f" ]] || continue
+  if ! bash -n "$f" 2>&1; then
+    echo "FAIL bash -n: ${f#"$REPO_ROOT"/}" >&2
+    fail=1
+  fi
+done
+
+if ! jq . "$REPO_ROOT/config/models.json" >/dev/null; then
+  echo "FAIL invalid JSON: config/models.json" >&2
+  fail=1
+fi
+
+if [[ "$fail" -eq 0 ]]; then
+  echo "lint OK: scripts parse, models.json is valid JSON"
+fi
+exit "$fail"
