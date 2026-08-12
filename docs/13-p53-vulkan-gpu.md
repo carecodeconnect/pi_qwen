@@ -11,7 +11,9 @@ Third hardware target for this sandbox, alongside the Apple-Silicon default (Met
 > **~20 tok/s decode** and passes every agentic gate the 7Bs failed, including multi-step
 > **write→execute** in pi. The verdict below still holds for *dense* models and for
 > *VRAM-resident* inference; it no longer holds for the machine.
-> **New P53 pi default: `pi --provider local-ollama --model nemotron-3.5-lightning-64k`.**
+> **New P53 pi default: `pi --provider local-ollama --model nemotron-3.5-lightning-64k`** —
+> with [caveats](#caveats--mechanically-solid-analytically-unreliable-2026-08-12): reliable
+> as an *executor*, ~50%-accurate as an *analyst*; verify its review/audit claims.
 
 **This architecture (Quadro RTX 4000, 8 GB) does not work as a reliable pi coding agent.** It was
 fully tested (2026-06-09) and the conclusion is a hardware limit, not a config gap:
@@ -308,7 +310,35 @@ A re-pull fetches the identical digest (`dae161e27b0e` — upstream unchanged in
 this is an ollama engine-side parsing change, not a stale model. Keep `qwen2.5-coder` wired
 for completion/Q&A, but it is **no longer the agent default**.
 
-### Status: VALIDATED — Nemotron 3.5 Lightning (ollama) is the P53 pi default
+### Caveats — mechanically solid, analytically unreliable (2026-08-12)
+
+Longer pi sessions show a **mixed picture**: the tool-use layer is dependable, the *analysis*
+layer is not. A "diagnose errors/improvements in this repo" task produced an authoritative,
+well-formatted audit whose claims fact-checked at **roughly 50% accuracy**:
+
+- **Breadth without verification.** It read ~6 files, then extrapolated the rest from priors.
+  Generic findings (portability, missing CI, error handling) were fine — those are safe
+  priors. Everything requiring the *actual state of this repo* degraded to plausible
+  fabrication: it invented README content to cite as evidence (named scripts the Layout
+  section never listed), and claimed the P53 entries in `models.json` "reference hardware not
+  part of this sandbox" — while *running on* one of those entries.
+- **Stale-context grounding lapse.** It reported `Cargo.toml` contents from an earlier read
+  in the same session instead of re-reading — the training-prior-over-tool-output failure
+  from the 7B era, in session-memory form. Files it had read once were treated as immutable.
+- **Confident broken fixes.** Its "ready-to-apply" patches included an `ss` fallback with
+  invalid syntax (and ss doesn't exist on macOS), and a wrapper script whose cleanup `trap`
+  was set too late to fire on failure. One suggestion (trim `models.json` to four models)
+  would have deleted the validated X270/P53 configs, including its own.
+- **Confidence is uncorrelated with accuracy.** Formatting, tables, and effort estimates
+  were indistinguishable between its correct and fabricated findings.
+
+**Practical guidance:** trust it to *execute* (read, run, write, iterate — the write→execute
+loop above is real) and to *summarise what it actually read*. Do **not** act on its
+review/audit output without verifying each claim against the files — apply-without-checking
+would have made this repo worse. For analysis tasks, prompt it to re-read files before citing
+them and to cite file:line for every claim; expect to discard about half the findings anyway.
+
+### Status: VALIDATED as an executor, with caveats as an analyst — the P53 pi default
 
 ```bash
 ./install/nemotron-lightning-ollama.sh
