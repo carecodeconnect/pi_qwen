@@ -284,6 +284,23 @@ Measured (P53, i7-9850H + Quadro RTX 4000, warm model):
 It is a **reasoning** model (emits a thinking phase; `reasoning: true` in models.json) — but
 unlike Nemotron-Nano it did not over-think, over-tool, or stall in these tests.
 
+### Runtime utilization (snapshot mid-generation, live pi session, 2026-08-12)
+
+| | |
+|---|---|
+| Placement (`ollama ps`) | **80% CPU / 20% GPU**, 64k context |
+| VRAM | **6.7 / 8.0 GiB** (~a fifth of the weights + compute buffers) |
+| CPU (runner `llama-server`) | **~5.6 cores busy** (562% of 16 threads) — the bottleneck |
+| GPU | **22% util, 38 W, 67 °C** — finishes its layers, waits on CPU |
+| RAM | runner RSS **24.3 GiB** of 93.9 GiB; ~80 GiB free, **0 swap** |
+| Decode, loaded pi session | **~10 tok/s** (session footer) vs 20.4 short-prompt — CPU-bound, drifts down as context grows |
+| Speculative decoding | ollama runs the model with **`--spec-type draft-mtp`** (multi-token prediction, draft 2) — part of why decode stays double-digit while CPU-heavy |
+| Reload | model unloads after 5 min idle (default keep-alive); reload ~25 s. `Environment=OLLAMA_KEEP_ALIVE=2h` in the systemd override keeps it resident |
+
+Comparison anchors on this machine: dense 7B fully in VRAM did ~29–45 tok/s decode but
+~6–10 tok/s *prefill* (Vulkan llama-server) and failed agentically; this 30B-A3B does
+~10–20 tok/s decode with **fast prefill** (~3k tok < 6 s) and *works* agentically.
+
 **Regression note — qwen2.5-coder broke under ollama 0.32.9.** The previously VALIDATED P53
 default now FAILS `tool-call-test` (4+ consecutive runs): the model emits bare JSON where its
 template's parser expects `<tool_call>`-wrapped output, so pi would see text, not tool calls.
