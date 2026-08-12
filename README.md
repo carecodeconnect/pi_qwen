@@ -37,6 +37,8 @@ Should work on any Apple Silicon Mac with ≥ 32 GB RAM. Bigger context windows 
 
 **Linux/CPU path (X270-class):** Validated on a ThinkPad X270 (i7-7600U, 14 GiB, no GPU, Ubuntu 26.04) running [Qwen3-4B-Instruct-2507](https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF) Q4_K_M (~2.5 GB) via apt-shipped llama.cpp. `tool-call-test` passes *and* real pi sessions reliably emit structured tool calls — 4B-Instruct-2507 is non-thinking by design, so there's no thinking-vs-speed trade-off. Decode is ~3.3 tok/s; first-turn prefill is the pain point, mitigated by `--cache-reuse 256` (turn-2+ skips the system-prompt portion). Setup walkthrough in [docs/12-linux-cpu.md](docs/12-linux-cpu.md); design notes — including why smaller Qwen3-1.7B and Qwen2.5-Coder-1.5B were tried and rejected — in [docs/TODO_x270.md](docs/TODO_x270.md).
 
+**Linux/GPU-hybrid path (P53-class):** Validated on a ThinkPad P53 (i7-9850H, 91 GiB RAM, Quadro RTX 4000 8 GB, Ubuntu 26.04) running [Nemotron 3.5 Lightning](https://ollama.com/library/nemotron-3.5-lightning) (30B MoE, **3B active**, Q4_K_M ~25 GB) via **ollama ≥ 0.32**, split ~80/20 CPU/GPU. The sparse MoE sidesteps the machine's earlier verdict that 8 GB VRAM caps you at (inadequate) 7B agents: ~20 tok/s decode, structured tool calls parse cleanly, and real pi sessions pass multi-step write→execute — the gate every 7B failed. One-shot setup: `./install/nemotron-lightning-ollama.sh`, then `pi --provider local-ollama --model nemotron-3.5-lightning-64k`. Full test record (including the ollama 0.32.9 regression that broke `qwen2.5-coder` tool-calling) in [docs/13-p53-vulkan-gpu.md](docs/13-p53-vulkan-gpu.md).
+
 ## How the pieces fit
 
 ```

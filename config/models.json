@@ -189,6 +189,22 @@
       "apiKey": "not-needed",
       "models": [
         {
+          "id": "nemotron-3.5-lightning-64k",
+          "name": "Nemotron-3.5-Lightning-30B-A3B Q4_K_M (local, P53 — via OLLAMA ≥ 0.32; 30B MoE / 3B active, 80/20 CPU/GPU, ~20 tok/s)",
+          "reasoning": true,
+          "input": [
+            "text"
+          ],
+          "contextWindow": 65536,
+          "maxTokens": 8192,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
+        },
+        {
           "id": "qwen2.5-coder",
           "name": "Qwen2.5-Coder-7B-Instruct (local, P53 \u2014 via OLLAMA; clean tool-call parsing where llama-server drops them)",
           "reasoning": false,

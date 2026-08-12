@@ -5,6 +5,14 @@ Third hardware target for this sandbox, alongside the Apple-Silicon default (Met
 
 ## Bottom line — 8 GB VRAM is below the bar for agentic pi (VERDICT)
 
+> **REVISED 2026-08-12 — the bar is broken by sparse MoE, not more VRAM.**
+> [Nemotron 3.5 Lightning](#nemotron-35-lightning-via-ollama--a-working-p53-agent-2026-08-12)
+> (30B MoE, **3B active**) via ollama ≥ 0.32 runs ~80/20 CPU/GPU on this box (91 GiB RAM) at
+> **~20 tok/s decode** and passes every agentic gate the 7Bs failed, including multi-step
+> **write→execute** in pi. The verdict below still holds for *dense* models and for
+> *VRAM-resident* inference; it no longer holds for the machine.
+> **New P53 pi default: `pi --provider local-ollama --model nemotron-3.5-lightning-64k`.**
+
 **This architecture (Quadro RTX 4000, 8 GB) does not work as a reliable pi coding agent.** It was
 fully tested (2026-06-09) and the conclusion is a hardware limit, not a config gap:
 
@@ -241,6 +249,54 @@ Residual 7B-class quirks (usable, not flawless):
   it re-read the tool output and corrected to "June 9, 2026." A nudge helps:
   "treat tool output as ground truth; never answer from training memory when a tool returned data."
 - These are 7B-on-8 GB limits — a larger model would be steadier but doesn't fit the Quadro.
+
+## Nemotron 3.5 Lightning via ollama — a WORKING P53 agent (2026-08-12)
+
+NVIDIA released **Nemotron 3.5 Lightning** (2026-08-11): 30B-total / **3B-active** MoE, hybrid
+Mamba-2 + MoE + attention, tool-calling-first ("built for always-on agents"), up to 1M context.
+The sparse activation changes the P53 math: the 25 GB Q4_K_M can't fit 8 GB VRAM, but with
+91 GiB system RAM ollama runs it **80/20 CPU/GPU** — and only 3B params fire per token, so
+decode stays usable where a dense 30B would crawl. VRAM stops being the binding constraint.
+
+Setup (`install/nemotron-lightning-ollama.sh`, idempotent):
+
+1. **ollama ≥ 0.32 required** — the 0.9.0 (2025-05) build predates the architecture. Upgraded
+   via the official installer; the `OLLAMA_MODELS=/mnt/data/ollama_models` systemd drop-in
+   survives the reinstall.
+2. `ollama pull nemotron-3.5-lightning:30b-a3b-q4_K_M` (25 GB).
+3. **64k-context variant** (`ollama create nemotron-3.5-lightning-64k`, `num_ctx 65536`) —
+   ollama's 4096 default would truncate pi's loop. Mamba-2 state is constant-size, so 64k
+   loads with the *same* 80/20 split and no memory blowup.
+4. `config/models.json` adds it to the `local-ollama` provider.
+
+Measured (P53, i7-9850H + Quadro RTX 4000, warm model):
+
+- **Decode: ~20.4 tok/s** (`ollama run --verbose`) — comfortably agent-usable.
+- **Prefill: ~3k tokens in < 6 s** via the OpenAI endpoint — no Vulkan-Turing prefill pain.
+- `tool-call-test`: **PASS 3/3** — clean structured `tool_calls`, no `<TOOLCALL>` parser drama.
+- Multi-turn tool loop (call → tool result → answer): **grounded** — fed `{"temp_c":7,
+  "conditions":"hail"}` and it answered "7°C with hail" (no training-prior override).
+- **pi end-to-end: PASS on both gates the 7Bs failed.** Read/summarise: accurate, grounded
+  summary of `install/qwen-ollama.sh`. **Write→execute:** "create fib.py, run it, report
+  output" → real `write` tool, real `bash` tool, correct file on disk, correct output
+  reported. No narrated-tool-call hallucination.
+
+It is a **reasoning** model (emits a thinking phase; `reasoning: true` in models.json) — but
+unlike Nemotron-Nano it did not over-think, over-tool, or stall in these tests.
+
+**Regression note — qwen2.5-coder broke under ollama 0.32.9.** The previously VALIDATED P53
+default now FAILS `tool-call-test` (4+ consecutive runs): the model emits bare JSON where its
+template's parser expects `<tool_call>`-wrapped output, so pi would see text, not tool calls.
+A re-pull fetches the identical digest (`dae161e27b0e` — upstream unchanged in 14 months), so
+this is an ollama engine-side parsing change, not a stale model. Keep `qwen2.5-coder` wired
+for completion/Q&A, but it is **no longer the agent default**.
+
+### Status: VALIDATED — Nemotron 3.5 Lightning (ollama) is the P53 pi default
+
+```bash
+./install/nemotron-lightning-ollama.sh
+pi --provider local-ollama --model nemotron-3.5-lightning-64k
+```
 
 ## TODO
 
