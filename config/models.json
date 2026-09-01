@@ -38,22 +38,6 @@
           }
         },
         {
-          "id": "local-glm-4.5-air",
-          "name": "GLM-4.5-Air (local)",
-          "reasoning": true,
-          "input": [
-            "text"
-          ],
-          "contextWindow": 32768,
-          "maxTokens": 8192,
-          "cost": {
-            "input": 0,
-            "output": 0,
-            "cacheRead": 0,
-            "cacheWrite": 0
-          }
-        },
-        {
           "id": "local-qwen3-coder-next",
           "name": "Qwen3-Coder-Next-80B-A3B-Instruct (local)",
           "reasoning": false,
@@ -189,8 +173,24 @@
       "apiKey": "not-needed",
       "models": [
         {
+          "id": "qwen3-coder:30b",
+          "name": "Qwen3-Coder-30B-A3B-Instruct Q4_K_M (local, M1 Max \u2014 via OLLAMA; 30B MoE / 3B active, non-thinking, tools)",
+          "reasoning": false,
+          "input": [
+            "text"
+          ],
+          "contextWindow": 65536,
+          "maxTokens": 8192,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
+        },
+        {
           "id": "nemotron-3.5-lightning-64k",
-          "name": "Nemotron-3.5-Lightning-30B-A3B Q4_K_M (local, P53 — via OLLAMA ≥ 0.32; 30B MoE / 3B active, 80/20 CPU/GPU, ~20 tok/s)",
+          "name": "Nemotron-3.5-Lightning-30B-A3B Q4_K_M (local, P53 \u2014 via OLLAMA \u2265 0.32; 30B MoE / 3B active, 80/20 CPU/GPU, ~20 tok/s)",
           "reasoning": true,
           "input": [
             "text"
